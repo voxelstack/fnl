@@ -2,11 +2,14 @@ type Literal = string | number | boolean | null;
 type List = [string, Expression[]];
 type Expression = Literal | List;
 
-export class ParseError extends Error {
+class ParseError extends Error {
     constructor(source: string, cursor: number) {
         const snippet = source.slice(Math.max(cursor - 16, 0), cursor + 16);
-        const pointer = Array(Math.min(cursor, 16)).fill(" ").join("") + "^";
-        super(`Unexpected token:\n${snippet}\n${pointer}`);
+        const frontEllipsis = (cursor - 16) > 0 ? "..." : "";
+        const backEllipsis = (cursor + 16) < source.length ? "..." : "";
+        const pointer = Array(frontEllipsis.length + "Unexpected token: ".length + Math.min(cursor, 16)).fill(" ").join("") + "^";
+
+        super(`Unexpected token: ${frontEllipsis}${snippet}${backEllipsis}\n${pointer}`);
     }
 }
 
@@ -143,7 +146,6 @@ export function parse(source: string) {
 
     function parseString() {
         take(); // "
-
         let str = "";
         while (!isEof() && peek() !== "\"") {
             if (peek() === "\\") {
@@ -157,7 +159,6 @@ export function parse(source: string) {
         if (isEof() || peek() !== "\"") {
             throw new ParseError(source, cursor);
         }
-
         take(); // "
 
         return str;
@@ -222,20 +223,9 @@ export function parse(source: string) {
     return result;
 }
 
-export class EvaluationError extends Error {
+class EvaluationError extends Error {
     constructor(expression: List, message?: string) {
-        function expand(expression: Expression, level = 3): string {
-            if (level === 0) {
-                return "..."
-            }
-
-            if (!Array.isArray(expression)) {
-                return expression === null ? "nil" : expression.toString();
-            }
-            
-            return `(${expression[0]}${expression[1].length > 0 ? " " : ""}${expression[1].map((expr) => expand(expr, --level)).join(" ")})`
-        }
-        super(`Invalid expression:\n${expand(expression)}\n${message}`);
+        super(`Invalid expression: (${expression[0]}${expression[1].length > 0 ? " " : ""}${expression[1].join(" ")})\n${message}`);
     }
 }
 
@@ -264,6 +254,41 @@ export function evaluateBare(expression: Expression, context?: Record<string, st
     try {
         return fn(...args);
     } catch (e) {
-        throw new EvaluationError(expression, "Runtime error.");
+        const message = e instanceof Error ? e.message : "Evaluation error.";
+        throw new EvaluationError(expression, message);
+    }
+}
+
+export type EvaluatedType = "string" | "number" | "boolean" | "nil" | "array" | "map";
+export function validate(name: string, args: any[], validators: EvaluatedType[], variadic = false) {
+    const argTypes = args.map((arg) => {
+        if (arg === null) {
+            return "nil";
+        } else if (Array.isArray(arg)) {
+            return "array";
+        } else if (typeof arg === "object") {
+            return "map";
+        } else {
+            return typeof arg;
+        }
+    });
+
+    let i = 0;
+    let valid = args.length >= validators.length;
+    while (valid && i < argTypes.length) {
+        if (i > validators.length && !variadic) {
+            valid = false;
+        } else {
+            const validator = validators[Math.min(i, validators.length - 1)];
+            if (argTypes[i] !== validator) {
+                valid = false;
+            }
+        }
+        ++i;
+    }
+
+    if (!valid) {
+        const displayValidators = variadic ? [...validators.slice(0, validators.length - 1), `...${validators[validators.length - 1]}`] : validators;
+        throw new Error(`Expected: (${[name, ...displayValidators].join(" ")})\nReceived: (${[name, ...argTypes].join(" ")})`);
     }
 }

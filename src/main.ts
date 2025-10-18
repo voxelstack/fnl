@@ -1,1 +1,1 @@
-export { parse, evaluate, evaluateBare } from "./lib/fnl";
+export { parse, evaluate, evaluateBare, validate } from "./lib/fnl";
