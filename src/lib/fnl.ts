@@ -1,6 +1,6 @@
-type Literal = string | number | boolean | null
-type List = [string, Expression[]]
-type Expression = Literal | List
+type Literal = string | number | boolean | null;
+type List = [string, Expression[]];
+type Expression = Literal | List;
 
 export class ParseError extends Error {
     constructor(source: string, cursor: number) {
@@ -222,6 +222,48 @@ export function parse(source: string) {
     return result;
 }
 
-export function evaluate(expr: Expression) {
-    
+export class EvaluationError extends Error {
+    constructor(expression: List, message?: string) {
+        function expand(expression: Expression, level = 3): string {
+            if (level === 0) {
+                return "..."
+            }
+
+            if (!Array.isArray(expression)) {
+                return expression === null ? "nil" : expression.toString();
+            }
+            
+            return `(${expression[0]}${expression[1].length > 0 ? " " : ""}${expression[1].map((expr) => expand(expr, --level)).join(" ")})`
+        }
+        super(`Invalid expression:\n${expand(expression)}\n${message}`);
+    }
+}
+
+export function evaluate(expression: Expression, context?: Record<string, string>, functions?: Record<string, (...args: any[]) => any>) {
+    const ctx = {
+        ...context,
+    };
+    const fn = {
+        ...functions,
+    };
+    return evaluateBare(expression, ctx, fn);
+}
+
+type EvaluatedExpression = string | number | boolean | null | Array<unknown> | Object;
+export function evaluateBare(expression: Expression, context?: Record<string, string>, functions?: Record<string, (...args: any[]) => any>): EvaluatedExpression {
+    if (!Array.isArray(expression)) {
+        return expression;
+    }
+
+    const fn = functions?.[expression[0]];
+    if (!fn) {
+        throw new EvaluationError(expression, `Undefined function: ${expression[0]}`);
+    }
+    const args = expression[1].map((arg) => evaluateBare(arg, context, functions));
+
+    try {
+        return fn(...args);
+    } catch (e) {
+        throw new EvaluationError(expression, "Runtime error.");
+    }
 }
