@@ -118,7 +118,9 @@ export function parse(source: string) {
             skipWhitespace();
         }
 
-        take(); // )
+        if (peek() !== ")") {
+            throw new ParseError(source, cursor);
+        }
         skipWhitespace();
 
         return params;
@@ -152,7 +154,7 @@ export function parse(source: string) {
             }
             str += take();
         }
-        if (isEof()) {
+        if (isEof() || peek() !== "\"") {
             throw new ParseError(source, cursor);
         }
 
