@@ -1,0 +1,32 @@
+{
+  "name": "@voxelstack/fnl",
+  "version": "0.1.0",
+  "description": "Friday night LISP.",
+  "license": "MIT",
+  "author": "voxelstack <voxelstack@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/voxelstack/fnl.git"
+  },
+  "type": "module",
+  "files": ["dist"],
+  "main": "./dist/fnl.umd.cjs",
+  "module": "./dist/fnl.js",
+  "exports": {
+    ".": {
+      "import": "./dist/fnl.js",
+      "require": "./dist/fnl.umd.cjs"
+    }
+  },
+  "types": "./dist/main.d.ts",
+  "scripts": {
+    "build": "tsc && vite build",
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "unplugin-dts": "^1.0.0-beta.6",
+    "vite": "^7.1.7",
+    "vitest": "^3.2.4"
+  }
+}
