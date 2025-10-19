@@ -1,6 +1,14 @@
-import { expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 import { evaluate } from "./fnl";
 
-test("echoes", () => {
-    expect(evaluate("echo")).toEqual("echo");
+describe("evaluate", () => {
+    test("number", () => {
+        expect(evaluate(22)).toStrictEqual(22);
+    });
+    test("string", () => {
+        expect(evaluate("fnl")).toStrictEqual("fnl");
+    });
+    test("boolean", () => {
+        expect(evaluate(true)).toStrictEqual(true);
+    });
 });
