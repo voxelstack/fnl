@@ -18,7 +18,7 @@ describe("evaluate", () => {
     test.each([
         { expr: `(quote sym)`, sym: "sym" },
     ])("$expr", ({ expr, sym }) => {
-        expect(evaluate(read(expr))).symbolNamed(sym);
+        expect(evaluate(read(expr))).toMatchEmptySymbol(sym);
     });
     test.each([
         { expr: `(if true 1 2)`, obj: 1 },

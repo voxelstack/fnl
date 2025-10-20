@@ -3,7 +3,7 @@ import { type Object, type Sym } from "../src/lib/fnl";
 
 interface CustomMatchers<R = unknown> {
     toMatchList: (expected: any[]) => R;
-    symbolNamed: (expected: string) => R;
+    toMatchEmptySymbol: (expected: string) => R;
 }
 
 declare module "vitest" {

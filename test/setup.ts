@@ -13,7 +13,7 @@ expect.extend({
             expected: formatted
         };
     },
-    symbolNamed: (received, expected) => ({
+    toMatchEmptySymbol: (received, expected) => ({
         pass: received.name === expected,
         message: () => `expected ${received.name} to match ${expected}`,
         actual: received.name,
