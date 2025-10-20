@@ -14,8 +14,22 @@ describe("evaluate", () => {
     test("nil", () => {
         expect(evaluate(null)).toStrictEqual(null);
     });
-    test("quote", () => {
-        expect(evaluate(List.from([Sym.empty("quote"), Sym.empty("sym")]))).symbolNamed("sym");
+
+    test.each([
+        { expr: `(quote sym)`, sym: "sym" },
+    ])("$expr", ({ expr, sym }) => {
+        expect(evaluate(read(expr))).symbolNamed(sym);
+    });
+    test.each([
+        { expr: `(if true 1 2)`, obj: 1 },
+        { expr: `(if false 1 2)`, obj: 2 },
+        // TODO Update with more readable expressions once I have other functions.
+        { expr: `(if (if true true false) 1 2)`, obj: 1 },
+        { expr: `(if (if true false true) 1 2)`, obj: 2 },
+        { expr: `(if true (if true 1 2) 2)`, obj: 1 },
+        { expr: `(if false 1 (if false 1 2))`, obj: 2 },
+    ])("$expr", ({ expr, obj }) => {
+        expect(evaluate(read(expr))).toStrictEqual(obj);
     });
 });
 

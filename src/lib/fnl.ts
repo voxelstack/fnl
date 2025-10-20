@@ -56,7 +56,7 @@ export class List {
 export type Atom = Sym | number | string | boolean | null;
 export type Object = Atom | List;
 
-export function evaluate(exp: Object) {
+export function evaluate(exp: Object): Object {
     if (atom(exp)) {
         if (symbol(exp)) {
             throw new Error("Unimplemented.");
@@ -71,11 +71,17 @@ export function evaluate(exp: Object) {
             switch (fn.name) {
                 case "quote":
                     return cadr(exp);
+                case "if":
+                    if (cdr(exp)?.length !== 3) {
+                        throw new Error("Malformed if.");
+                    }
+                    return evaluate(cadr(exp)) ? evaluate(caddr(exp)) : evaluate(cadddr(exp));
             }
         } else {
             throw new Error("Unimplemented.")
         }
     }
+    throw new Error("Invalid expression.");
 }
 
 export function read(input: string): Object {
@@ -237,3 +243,5 @@ function nil(o: Object): o is null { return o === null };
 function car(o: List) { return o.element(0); }
 function cdr(o: List) { return o.view(1); }
 function cadr(o: List) { return o.element(1); }
+function caddr(o: List) { return o.element(2); }
+function cadddr(o: List) { return o.element(3); }
