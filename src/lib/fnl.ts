@@ -75,7 +75,8 @@ export function evaluate(exp: Object): Object {
                     if (cdr(exp)?.length !== 3) {
                         throw new Error("Malformed if.");
                     }
-                    return evaluate(cadr(exp)) ? evaluate(caddr(exp)) : evaluate(cadddr(exp));
+                    // Explicit `=== true`, no coercion to boolean.
+                    return evaluate(cadr(exp)) === true ? evaluate(caddr(exp)) : evaluate(cadddr(exp));
             }
         } else {
             throw new Error("Unimplemented.")
