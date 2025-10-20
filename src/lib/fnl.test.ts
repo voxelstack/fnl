@@ -17,19 +17,51 @@ describe("evaluate", () => {
 });
 
 describe("read", () => {
-    test("symbol", () => {
-        expect(read(`symbol`)).toMatchObject({ name: "symbol" })
+    test.each([
+        { expr: `symbol`, name: "symbol" },
+        { expr: `SYMBOL`, name: "symbol" },
+        { expr: `*symbol*`, name: "*symbol*" },
+        { expr: `pkg:symbol`, name: "pkg:symbol" },
+        { expr: `{&^1a`, name: "{&^1a" },
+        { expr: `+`, name: "+" },
+        { expr: `&&`, name: "&&" }
+    ])("symbol from $expr", ({ expr, name }) => {
+        expect(read(expr)).toMatchObject({ name })
     });
-    test("number", () => {
-        expect(read(`22`)).toStrictEqual(22);
+    test.each([
+        { expr: `0`, obj: 0 },
+        { expr: `22`, obj: 22 },
+        { expr: `-22`, obj: -22 },
+        { expr: `3.14`, obj: 3.14 },
+        { expr: `-3.14`, obj: -3.14 }
+    ])("number", ({ expr, obj }) => {
+        expect(read(expr)).toStrictEqual(obj);
     });
-    test("string", () => {
-        expect(read(`"fnl"`)).toStrictEqual("fnl");
+    test.each([
+        { expr: `"fnl"`, obj: "fnl" },
+        { expr: `"f n l"`, obj: "f n l"}
+    ])("string from $expr", ({ expr, obj }) => {
+        expect(read(expr)).toStrictEqual(obj);
     });
-    test("boolean", () => {
-        expect(read(`true`)).toStrictEqual(true);
+    test.each([
+        { expr: `true`, obj: true },
+        { expr: `false`, obj: false }
+    ])("boolean from $expr", ({ expr, obj }) => {
+        expect(read(expr)).toStrictEqual(obj);
     });
-    test("nil", () => {
-        expect(read(`nil`)).toStrictEqual(null);
+    test.each([
+        { expr: ``, obj: null },
+        { expr: `nil`, obj: null },
+    ])("nil from $expr", ({ expr, obj }) => {
+        expect(read(expr)).toStrictEqual(obj);
+    });
+    
+    test.each([
+        { expr: `()`, obj: [] },
+        { expr: `(1 1)`, obj: [1, 1] },
+        { expr: `(+ 1 1)`, obj: [expect.objectContaining({ name: "+" }), 1, 1] },
+        { expr: `(+ 1 (* 2 3))`, obj: [expect.objectContaining({ name: "+" }), 1, [expect.objectContaining({ name: "*"}), 2, 3]] },
+    ])("list from $expr", ({ expr, obj }) => {
+        expect(read(expr)).toStrictEqual(obj);
     });
 });

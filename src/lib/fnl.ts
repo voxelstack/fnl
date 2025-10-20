@@ -6,7 +6,7 @@ class Symbol {
     }
 }
 type Atom = Symbol | number | string | boolean | null;
-type List = Atom[];
+type List = Object[];
 type Object = Atom | List;
 
 export function evaluate(exp: Object) {
@@ -24,10 +24,19 @@ export function evaluate(exp: Object) {
 }
 
 export function read(input: string): Object {
-    return parse(tokenize(input));
+    const tokens = tokenize(input);
+    const obj = parse(tokens);
+
+    if (tokens.length > 0) {
+        throw new Error("Unexpected token.");
+    }
+
+    return obj;
     
     interface Token {
         type:
+            | "open"
+            | "close"
             | "symbol"
             | "number"
             | "string"
@@ -41,39 +50,49 @@ export function read(input: string): Object {
     function tokenize(input: string) {
         const tokens: Token[] = [];
         
-        for (let i = 0; i < input.length; ++i) {
-            const next = input[i];
+        let i = 0;
+        const eof = (lookAhead = 0) => i + lookAhead >= input.length;
+        const peek = (lookAhead = 0) => input[i + lookAhead];
+        while (!eof()) {
+            const next = peek();
             if (whitespace(next)) {
+                ++i;
                 continue;
             }
 
             let len: number;
             let token: Token;
-            if (next === "\"") {
-                len = readWhile((c) => c !== "\"", 1);
-                token = produce("string", len, (s) => s.slice(1));
-            } else if (numeric(next) || (next === "-" && numeric(input[i + 1]))) {
-                len = readWhile(numeric, next === "-" ? 1 : 0);
-                if (input[i + len] === ".") {
+            if (next === "(") {
+                len = 1;
+                token = produce("open");
+            } else if (next === ")") {
+                len = 1;
+                token = produce("close");
+            } else if (next === "\"") {
+                len = readWhile((c) => c !== "\"", 1) + 1;
+                token = produce("string", (s) => s.slice(1, -1));
+            } else if (numeric(next) || (next === "-" && !eof(1) && numeric(peek(1)))) {
+                len = readWhile(numeric, next === "-" ? 2 : 0);
+                if (peek(len) === ".") {
                     ++len;
-                    if (i + len >= input.length || !numeric(input[i + len])) {
+                    if (eof(len) || !numeric(peek(len))) {
                         throw new Error("Missing decimal part.");
                     }
                     len = readWhile(numeric, len);
                 }
-                token = produce("number", len, Number);
+                token = produce("number", Number);
             } else if (tryWord("true")) {
                 len = "true".length;
-                token = produce("boolean", len, () => true);
+                token = produce("boolean", () => true);
             } else if (tryWord("false")) {
                 len = "false".length;
-                token = produce("boolean", len, () => false);
+                token = produce("boolean", () => false);
             } else if (tryWord("nil")) {
                 len = "nil".length;
-                token = produce("nil", len, () => null);
+                token = produce("nil", () => null);
             } else if (valid(next)) {
                 len = readWhile(valid);
-                token = produce("symbol", len, (s) => new Symbol(s));
+                token = produce("symbol", (s) => new Symbol(s.toLowerCase()));
             } else {
                 throw new Error("Cannot read.");
             }
@@ -91,23 +110,28 @@ export function read(input: string): Object {
                 return (c >= "0" && c <= "9");
             }
             function special(c: string) {
-                // Omit parenthesis, they are delimiters.
-                return "!$\"',_-./:;?+<=>#%&*@[\\]{|}`^~".includes(c);
+                // Omit parenthesis and quotes, they are delimiters.
+                return "!$',_-./:;?+<=>#%&*@[\\]{|}`^~".includes(c);
+            }
+            function terminator(c: string) {
+                return whitespace(c) || c === ")";
             }
             function valid(c: string) {
                 return latin(c) || numeric(c) || special(c);
             }
             function tryWord(word: string) {
-                for (let j = 0; i + j < input.length && j < word.length; ++j) {
-                    if (word[j] !== input[i + j]) return false;
+                let j;
+                for (j = 0; !eof(j) && j < word.length; ++j) {
+                    if (word[j] !== peek(j)) return false;
                 }
-                return true;
+
+                return eof(j) || terminator(peek(j));
             }
             function readWhile(cond: (c: string) => boolean, len = 0) {
-                while (i + len < input.length && cond(input[i + len])) ++len;
+                while (!eof(len) && cond(peek(len))) ++len;
                 return len;
             }
-            function produce(type: Token["type"], len: number, parse: (value: string) => any) {
+            function produce(type: Token["type"], parse: (value: string) => any = s => s) {
                 return {
                     type,
                     value: parse(input.slice(i, i + len)),
@@ -119,19 +143,32 @@ export function read(input: string): Object {
         return tokens;
     }
 
-    function parse(tokens: Token[]) {
-        if (tokens.length > 1) {
-            throw new Error("Expected atom");
-        }
+    function parse(tokens: Token[], next?: Token) {
+        let token = next ?? tokens.shift();
+        if (!token) return null;
 
-        switch (tokens[0].type) {
+        switch (token.type) {
+            case "open":
+                const list: List = [];
+
+                while ((token = tokens.shift())) {
+                    if (token.type === "open") {
+                        list.push(parse(tokens, token));
+                    } else if (token.type === "close") {
+                        return list;
+                    } else {
+                        list.push(token.value);
+                    }
+                }
+                throw new Error("Unterminated list.");
             case "symbol":
             case "number":
             case "string":
             case "boolean":
             case "nil":
-                return tokens[0].value;
+                return token.value as Atom;
         }
+        throw new Error("Unexpected token.");
     }
 }
 
