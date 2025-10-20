@@ -1,13 +1,60 @@
-class Symbol {
+export class Sym {
     public readonly name: string;
 
     constructor(name: string) {
-        this.name = name;
+        this.name = name.toLowerCase();
+    }
+
+    public static empty(name: string) {
+        return new Sym(name);
+    }
+
+    public toString() {
+        return this.name;
     }
 }
-type Atom = Symbol | number | string | boolean | null;
-type List = Object[];
-type Object = Atom | List;
+export class List {
+    private readonly data: Object[];
+    private readonly cursor: number;
+
+    constructor(data: Object[] = [], cursor = 0) {
+        this.data = data;
+        this.cursor = cursor;
+    }
+
+    public static from(data: Iterable<Object>) {
+        return new List(Array.from(data));
+    }
+
+    public get length() {
+        return this.data.length - this.cursor;
+    }
+
+    public push(o: Object) {
+        this.data.push(o);
+    }
+
+    public pop() {
+        return this.data.splice(this.cursor, 1);
+    }
+
+    public element(index: number) {
+        return this.data[this.cursor + index] ?? null;
+    }
+
+    public view(index: number) {
+        if (this.data.length > index) {
+            return new List(this.data, index);
+        }
+        return null;
+    }
+
+    public toString() {
+        return `(${this.data.map((o): string => o === null ? 'nil' : o.toString()).join(" ")})`
+    }
+}
+export type Atom = Sym | number | string | boolean | null;
+export type Object = Atom | List;
 
 export function evaluate(exp: Object) {
     if (atom(exp)) {
@@ -16,10 +63,18 @@ export function evaluate(exp: Object) {
         } else if (number(exp) || string(exp) || boolean(exp) || nil(exp)) {
             return exp;
         } else {
-            throw new Error("Cannot evaluate.");
+            throw new Error("Invalid expression.");
         }
     } else {
-        throw new Error("Unimplemented.");
+        const fn = car(exp);
+        if (symbol(fn)) {
+            switch (fn.name) {
+                case "quote":
+                    return cadr(exp);
+            }
+        } else {
+            throw new Error("Unimplemented.")
+        }
     }
 }
 
@@ -92,7 +147,7 @@ export function read(input: string): Object {
                 token = produce("nil", () => null);
             } else if (valid(next)) {
                 len = readWhile(valid);
-                token = produce("symbol", (s) => new Symbol(s.toLowerCase()));
+                token = produce("symbol", Sym.empty);
             } else {
                 throw new Error("Cannot read.");
             }
@@ -149,7 +204,7 @@ export function read(input: string): Object {
 
         switch (token.type) {
             case "open":
-                const list: List = [];
+                const list = new List();
 
                 while ((token = tokens.shift())) {
                     if (token.type === "open") {
@@ -172,9 +227,13 @@ export function read(input: string): Object {
     }
 }
 
-function atom(o: Object): o is Atom { return !Array.isArray(o); }
-function symbol(o: Object): o is Symbol { return o instanceof Symbol; }
+function atom(o: Object): o is Atom { return !(o instanceof List); }
+function symbol(o: Object): o is Sym { return o instanceof Sym; }
 function number(o: Object): o is number { return typeof o === "number"; }
 function string(o: Object): o is string { return typeof o === "string"; }
 function boolean(o: Object): o is boolean { return typeof o === "boolean"; }
 function nil(o: Object): o is null { return o === null };
+
+function car(o: List) { return o.element(0); }
+function cdr(o: List) { return o.view(1); }
+function cadr(o: List) { return o.element(1); }

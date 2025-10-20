@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { evaluate, read } from "./fnl";
+import { evaluate, List, read, Sym } from "../src/lib/fnl";
 
 describe("evaluate", () => {
     test("number", () => {
@@ -13,6 +13,9 @@ describe("evaluate", () => {
     });
     test("nil", () => {
         expect(evaluate(null)).toStrictEqual(null);
+    });
+    test("quote", () => {
+        expect(evaluate(List.from([Sym.empty("quote"), Sym.empty("sym")]))).symbolNamed("sym");
     });
 });
 
@@ -59,9 +62,9 @@ describe("read", () => {
     test.each([
         { expr: `()`, obj: [] },
         { expr: `(1 1)`, obj: [1, 1] },
-        { expr: `(+ 1 1)`, obj: [expect.objectContaining({ name: "+" }), 1, 1] },
-        { expr: `(+ 1 (* 2 3))`, obj: [expect.objectContaining({ name: "+" }), 1, [expect.objectContaining({ name: "*"}), 2, 3]] },
+        { expr: `(+ 1 1)`, obj: [Sym.empty("+"), 1, 1] },
+        { expr: `(+ 1 (* 2 3))`, obj: [Sym.empty("+"), 1, [Sym.empty("*"), 2, 3]] },
     ])("list from $expr", ({ expr, obj }) => {
-        expect(read(expr)).toStrictEqual(obj);
+        expect(read(expr)).toMatchList(obj);
     });
 });
