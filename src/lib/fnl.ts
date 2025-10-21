@@ -27,7 +27,7 @@ export class List {
     }
 
     public get length() {
-        return this.data.length - this.cursor;
+        return Math.max(this.data.length - this.cursor, 0);
     }
 
     public push(o: Object) {
@@ -66,17 +66,24 @@ export function evaluate(exp: Object): Object {
             throw new Error("Invalid expression.");
         }
     } else {
-        const fn = car(exp);
+        const fn = exp.element(0);
         if (symbol(fn)) {
             switch (fn.name) {
                 case "quote":
-                    return cadr(exp);
+                    return exp.element(1);
                 case "if":
-                    if (cdr(exp)?.length !== 3) {
+                    if (exp.length !== 4) {
                         throw new Error("Malformed if.");
                     }
                     // Explicit `=== true`, no coercion to boolean.
-                    return evaluate(cadr(exp)) === true ? evaluate(caddr(exp)) : evaluate(cadddr(exp));
+                    return evaluate(exp.element(1)) === true ? evaluate(exp.element(2)) : evaluate(exp.element(3));
+                case "do":
+                    let i = 1;
+                    while (i < exp.length - 1) {
+                        evaluate(exp.element(i++));
+                    }
+                    // exp.element(i) returns null if the list is empty which is why we don't check for that.
+                    return evaluate(exp.element(i));
             }
         } else {
             throw new Error("Unimplemented.")

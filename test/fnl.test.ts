@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { evaluate, List, read, Sym } from "../src/lib/fnl";
+import { evaluate, read, Sym } from "../src/lib/fnl";
 
 describe("evaluate", () => {
     test("number", () => {
@@ -31,6 +31,16 @@ describe("evaluate", () => {
     ])("$expr", ({ expr, obj }) => {
         expect(evaluate(read(expr))).toStrictEqual(obj);
     });
+    test.each([
+        { expr: `(do)`, obj: null },
+        { expr: `(do nil)`, obj: null },
+        { expr: `(do 1 2 3)`, obj: 3 },
+        // TODO Update with more readable expressions once I have other functions.
+        { expr: `(do 1 2 3 (if false 4 5))`, obj: 5 },
+        { expr: `(do 1 2 (do 3 4))`, obj: 4 },
+    ])("$expr", ({ expr, obj }) => {
+        expect(evaluate(read(expr))).toStrictEqual(obj);
+    });
 });
 
 describe("read", () => {
@@ -51,7 +61,7 @@ describe("read", () => {
         { expr: `-22`, obj: -22 },
         { expr: `3.14`, obj: 3.14 },
         { expr: `-3.14`, obj: -3.14 }
-    ])("number", ({ expr, obj }) => {
+    ])("number from $expr", ({ expr, obj }) => {
         expect(read(expr)).toStrictEqual(obj);
     });
     test.each([
