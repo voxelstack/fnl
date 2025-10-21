@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { List, type Object, Sym } from "../src/lib/fnl";
+import { List, type Object, Symbol } from "../src/lib/fnl";
 
 expect.extend({
     toMatchList(received, expected) {
@@ -21,8 +21,8 @@ expect.extend({
     })
 });
 
-function symbolMatches(received: any, expected: Sym) {
-    let pass = received instanceof Sym;
+function symbolMatches(received: any, expected: Symbol) {
+    let pass = received instanceof Symbol;
     pass = pass && received.name === expected.name;
 
     return pass;
@@ -37,7 +37,7 @@ function listMatches(received: any, expected: Object[]): boolean {
         const currReceived = received.element(i);
         if (currReceived instanceof List && Array.isArray(currExpected)) {
             return pass && listMatches(currReceived, currExpected);
-        } else if (currReceived instanceof Sym && currExpected instanceof Sym) {
+        } else if (currReceived instanceof Symbol && currExpected instanceof Symbol) {
             return pass && symbolMatches(currReceived, currExpected);
         } else {
             return pass && currReceived === currExpected;

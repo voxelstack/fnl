@@ -1,5 +1,4 @@
 import "vitest";
-import { type Object, type Sym } from "../src/lib/fnl";
 
 interface CustomMatchers<R = unknown> {
     toMatchList: (expected: any[]) => R;

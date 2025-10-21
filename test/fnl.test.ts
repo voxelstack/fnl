@@ -1,7 +1,13 @@
 import { describe, expect, test } from "vitest";
-import { evaluate, read, Sym } from "../src/lib/fnl";
+import { evaluate, read, Symbol } from "../src/lib/fnl";
 
 describe("evaluate", () => {
+    test("symbol", () => {
+        const sym = Symbol.empty("var");
+        const env = new Map();
+        env.set(sym, 22);
+        expect(evaluate(sym, env)).toStrictEqual(22);
+    });
     test("number", () => {
         expect(evaluate(22)).toStrictEqual(22);
     });
@@ -86,8 +92,8 @@ describe("read", () => {
     test.each([
         { expr: `()`, obj: [] },
         { expr: `(1 1)`, obj: [1, 1] },
-        { expr: `(+ 1 1)`, obj: [Sym.empty("+"), 1, 1] },
-        { expr: `(+ 1 (* 2 3))`, obj: [Sym.empty("+"), 1, [Sym.empty("*"), 2, 3]] },
+        { expr: `(+ 1 1)`, obj: [Symbol.empty("+"), 1, 1] },
+        { expr: `(+ 1 (* 2 3))`, obj: [Symbol.empty("+"), 1, [Symbol.empty("*"), 2, 3]] },
     ])("list from $expr", ({ expr, obj }) => {
         expect(read(expr)).toMatchList(obj);
     });

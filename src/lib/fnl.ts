@@ -1,4 +1,4 @@
-export class Sym {
+export class Symbol {
     public readonly name: string;
 
     constructor(name: string) {
@@ -6,7 +6,7 @@ export class Sym {
     }
 
     public static empty(name: string) {
-        return new Sym(name);
+        return new Symbol(name);
     }
 
     public toString() {
@@ -53,13 +53,14 @@ export class List {
         return `(${this.data.map((o): string => o === null ? 'nil' : o.toString()).join(" ")})`
     }
 }
-export type Atom = Sym | number | string | boolean | null;
+export type Atom = Symbol | number | string | boolean | null;
 export type Object = Atom | List;
+export type Environment = Map<Symbol, Object>;
 
-export function evaluate(exp: Object): Object {
+export function evaluate(exp: Object, env: Environment = new Map()): Object {
     if (atom(exp)) {
         if (symbol(exp)) {
-            throw new Error("Unimplemented.");
+            return lookup(exp, env);
         } else if (number(exp) || string(exp) || boolean(exp) || nil(exp)) {
             return exp;
         } else {
@@ -76,14 +77,14 @@ export function evaluate(exp: Object): Object {
                         throw new Error("Malformed if.");
                     }
                     // Explicit `=== true`, no coercion to boolean.
-                    return evaluate(exp.element(1)) === true ? evaluate(exp.element(2)) : evaluate(exp.element(3));
+                    return evaluate(exp.element(1), env) === true ? evaluate(exp.element(2), env) : evaluate(exp.element(3), env);
                 case "do":
                     let i = 1;
                     while (i < exp.length - 1) {
-                        evaluate(exp.element(i++));
+                        evaluate(exp.element(i++), env);
                     }
                     // exp.element(i) returns null if the list is empty which is why we don't check for that.
-                    return evaluate(exp.element(i));
+                    return evaluate(exp.element(i), env);
             }
         } else {
             throw new Error("Unimplemented.")
@@ -93,6 +94,12 @@ export function evaluate(exp: Object): Object {
 }
 
 export function read(input: string): Object {
+    // TODO
+    // Can symbols be static across multiple evaluations? Probably not.
+    // Do I pass it externally?
+    // I will think about it later.
+    const symbols: Map<string, Symbol> = new Map();
+
     const tokens = tokenize(input);
     const obj = parse(tokens);
 
@@ -161,7 +168,15 @@ export function read(input: string): Object {
                 token = produce("nil", () => null);
             } else if (valid(next)) {
                 len = readWhile(valid);
-                token = produce("symbol", Sym.empty);
+                token = produce("symbol", (name) => {
+                    if (symbols.has(name)) {
+                        return symbols.get(name);
+                    }
+
+                    const symbol = Symbol.empty(name);
+                    symbols.set(name, symbol);
+                    return symbol;
+                });
             } else {
                 throw new Error("Cannot read.");
             }
@@ -242,7 +257,7 @@ export function read(input: string): Object {
 }
 
 function atom(o: Object): o is Atom { return !(o instanceof List); }
-function symbol(o: Object): o is Sym { return o instanceof Sym; }
+function symbol(o: Object): o is Symbol { return o instanceof Symbol; }
 function number(o: Object): o is number { return typeof o === "number"; }
 function string(o: Object): o is string { return typeof o === "string"; }
 function boolean(o: Object): o is boolean { return typeof o === "boolean"; }
@@ -253,3 +268,10 @@ function cdr(o: List) { return o.view(1); }
 function cadr(o: List) { return o.element(1); }
 function caddr(o: List) { return o.element(2); }
 function cadddr(o: List) { return o.element(3); }
+
+function lookup(symbol: Symbol, env: Environment) {
+    if (!env.has(symbol)) {
+        throw new Error("Unbound variable.");
+    }
+    return env.get(symbol)!;
+}
