@@ -1,12 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { evaluate, read, Symbol } from "../src/lib/fnl";
+import { Environment, evaluate, NativeFunction, read, Symbol } from "../src/lib/fnl";
 
 describe("evaluate", () => {
     test("symbol", () => {
         const sym = Symbol.empty("var");
-        const env = new Map();
-        env.set(sym, 22);
-        expect(evaluate(sym, env)).toStrictEqual(22);
+        expect(evaluate(sym, Environment.from({ [sym.name]: 22 }))).toStrictEqual(22);
     });
     test("number", () => {
         expect(evaluate(22)).toStrictEqual(22);
@@ -47,6 +45,21 @@ describe("evaluate", () => {
     ])("$expr", ({ expr, obj }) => {
         expect(evaluate(read(expr))).toStrictEqual(obj);
     });
+
+    test.each([
+        {
+            expr: `((lambda (a) (+ a 1)) 1)`,
+            env: Environment.from({ "+": new NativeFunction((a: number, b: number) => a + b)}),
+            obj: 2
+        },
+        {
+            expr: `(((lambda (a) (lambda (b) (+ a b))) 1) 2)`,
+            env: Environment.from({ "+": new NativeFunction((a: number, b: number) => a + b)}),
+            obj: 3
+        },
+    ])("$expr", ({ expr, env, obj }) => {
+        expect(evaluate(read(expr), env)).toStrictEqual(obj);
+    })
 });
 
 describe("read", () => {
