@@ -13,65 +13,10 @@ export class Symbol {
         return this.name;
     }
 }
-export class List {
-    private readonly data: Object[];
-    private readonly cursor: number;
 
-    constructor(data: Object[] = [], cursor = 0) {
-        this.data = data;
-        this.cursor = cursor;
-    }
-
-    public static from(data: Iterable<Object>) {
-        return new List(Array.from(data));
-    }
-
-    public get length() {
-        return Math.max(this.data.length - this.cursor, 0);
-    }
-
-    public push(o: Object) {
-        this.data.push(o);
-    }
-
-    public pop() {
-        // FIXME This breaks every view.
-        return this.data.splice(this.cursor, 1);
-    }
-
-    public element(index: number) {
-        return this.data[this.cursor + index] ?? null;
-    }
-
-    public view(index: number) {
-        if (this.data.length > index) {
-            return new List(this.data, index);
-        }
-        return null;
-    }
-
-    public forEach(fn: (element: Object, index: number, list: List) => void) {
-        for (let i = this.cursor; i < this.length; ++i) {
-            fn(this.element(i), i, this);
-        }
-    }
-
-    public map<T>(fn: (element: Object, index: number, list: List) => T): T[] {
-          return this.reduce((array, element, index, list) => {
-            return [...array, fn(element, index, list)];
-          }, [] as T[]);
-    }
-
-    public reduce<T>(fn: (prev: T, curr: Object, index: number, list: List) => T, initialValue: T): T {
-        let acc = initialValue;
-        this.forEach((element, index) => {
-            acc = fn(acc, element, index, this);
-        });
-        return acc;
-    }
-
+export class List extends Array<Object> {
     public toString() {
-        return `(${this.data.map((o): string => o === null ? 'nil' : o.toString()).join(" ")})`
+        return `(${this.map((o): string => o === null ? 'nil' : o.toString()).join(" ")})`
     }
 }
 
@@ -104,14 +49,14 @@ export class NativeFunction extends Function {
         this.assertArity(values);
         return this.fn(...values.map((v) => v));
     }
-};
+}
 
 class Lambda extends Function {
     private readonly variables: Symbol[];
-    private readonly body: Object;
+    private readonly body: List;
     private readonly env: Environment;
 
-    constructor(variables: List, body: Object, env: Environment) {
+    constructor(variables: List, body: List, env: Environment) {
         super();
 
         this.variables = variables.map((el) => {
@@ -133,7 +78,7 @@ class Lambda extends Function {
 
         const newEnv = new Environment(this.env);
         this.variables.forEach((variable, i) => {
-            newEnv.set(variable, values.element(i))
+            newEnv.set(variable, values[i])
         });
         
         return prog(this.body, newEnv);
@@ -142,6 +87,7 @@ class Lambda extends Function {
 
 export type Atom = Function | Symbol | number | string | boolean | null; 
 export type Object = Atom | List;
+
 export class Environment {
     private readonly data: Map<string, Object>;
     private readonly parent?: Environment;
@@ -182,47 +128,37 @@ export class Environment {
     }
 
     extend(keys: Symbol[], values: List) {
-        keys.forEach((k, i) => this.set(k, values.element(i)));
+        keys.forEach((k, i) => this.set(k, values[i]));
     }
 }
 
 export function evaluate(exp: Object, env = Environment.empty()): Object {
-    if (atom(exp)) {
-        if (symbol(exp)) {
+    if (symbol(exp)) {
             return lookup(exp, env);
-        } else if (number(exp) || string(exp) || boolean(exp) || nil(exp) || primitive(exp)) {
-            return exp;
-        } else {
-            throw new Error("Invalid expression.");
-        }
-    } else {
-        const fn = exp.element(0);
+    } else if(list(exp)) {
+        const fn = exp[0];
         if (symbol(fn)) {
             switch (fn.name) {
                 case "quote":
-                    return exp.element(1);
+                    return exp[1];
                 case "if":
                     if (exp.length !== 4) {
                         throw new Error("Malformed if.");
                     }
-
-                    if (evaluate(exp.element(1))) {
-                        return evaluate(exp.element(2), env)
-                    } else {
-                        return evaluate(exp.element(3), env);
-                    }
+                    return evaluate(evaluate(exp[1]) ? exp[2] : exp[3], env)
                 case "do":
-                    return prog(exp.view(1), env);
+                    return prog(exp.slice(1), env);
                 case "lambda":
-                    const variables = exp.element(1);
+                    const variables = exp[1];
                     if (!list(variables)) {
                         throw new Error("Malformed lambda.");
                     }
-                    return new Lambda(variables, cddr(exp), env);
+                    return new Lambda(variables, exp.slice(2), env);
             }
         }
-        return apply(evaluate(exp.element(0), env), evlis(cdr(exp), env));
+        return apply(evaluate(exp[0], env), evlis(exp.slice(1), env));
     }
+    return exp;
 }
 
 export function read(input: string): Object {
@@ -394,13 +330,6 @@ function nil(o: Object): o is null { return o === null };
 function func(o: Object): o is Function { return o instanceof Function; }
 function primitive(o: Object): o is NativeFunction { return o instanceof NativeFunction; }
 
-function car(o: List) { return o.element(0); }
-function cdr(o: List) { return o.view(1); }
-function cddr(o: List) { return o.view(2); }
-function cadr(o: List) { return o.element(1); }
-function caddr(o: List) { return o.element(2); }
-function cadddr(o: List) { return o.element(3); }
-
 function lookup(symbol: Symbol, env: Environment) {
     if (!env.has(symbol)) {
         throw new Error("Unbound variable.");
@@ -408,29 +337,15 @@ function lookup(symbol: Symbol, env: Environment) {
     return env.get(symbol)!;
 }
 
-function prog(exps: Object, env: Environment) {
-    if (atom(exps)) {
-        return exps;
+function prog(exps: List, env: Environment) {
+    for (let i = 0; i < exps.length - 1; ++i) {
+        evaluate(exps[i], env);
     }
-
-    let i = 0;
-    while (i < exps.length - 1) {
-        evaluate(exps.element(i++), env);
-    }
-    // exp.element(i) returns null if the list is empty which is why we don't check for that.
-    return evaluate(exps.element(i), env);
+    return evaluate(exps[exps.length - 1] ?? null, env);
 }
 
-// TODO Change from Object to List.
-function evlis(exps: Object, env: Environment) {
-    const vals = new List();
-    if (!atom(exps)) {
-        for (let i = 0; i < exps.length; ++i) {
-            vals.push(evaluate(exps.element(i), env));
-        }
-    }
-
-    return vals;
+function evlis(exps: List, env: Environment) {
+    return exps.map((exp) => evaluate(exp, env))
 }
 
 function apply(fn: Object, values: List): Object {

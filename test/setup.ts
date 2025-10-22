@@ -34,7 +34,7 @@ function listMatches(received: any, expected: Object[]): boolean {
     }
 
     return expected.reduce<boolean>((pass, currExpected, i) => {
-        const currReceived = received.element(i);
+        const currReceived = received[i];
         if (currReceived instanceof List && Array.isArray(currExpected)) {
             return pass && listMatches(currReceived, currExpected);
         } else if (currReceived instanceof Symbol && currExpected instanceof Symbol) {
