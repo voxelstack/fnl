@@ -122,9 +122,9 @@ export class Environment {
         return this.data.has(key.name) || !!this.parent?.has(key);
     }
 
-    set(key: Symbol, value: Object): this {
+    set(key: Symbol, value: Object): Object {
         this.data.set(key.name, value);
-        return this;
+        return value;
     }
 
     extend(keys: Symbol[], values: List) {
@@ -134,7 +134,11 @@ export class Environment {
 
 export function evaluate(exp: Object, env = Environment.empty()): Object {
     if (symbol(exp)) {
-            return lookup(exp, env);
+        const value = env.get(exp);
+        if (value === undefined) {
+            throw new Error(`Unbound variable ${exp.name}.`);
+        }
+        return value;
     } else if(list(exp)) {
         const fn = exp[0];
         if (symbol(fn)) {
@@ -145,7 +149,7 @@ export function evaluate(exp: Object, env = Environment.empty()): Object {
                     if (exp.length !== 4) {
                         throw new Error("Malformed if.");
                     }
-                    return evaluate(evaluate(exp[1]) ? exp[2] : exp[3], env)
+                    return evaluate(evaluate(exp[1], env) ? exp[2] : exp[3], env)
                 case "do":
                     return prog(exp.slice(1), env);
                 case "lambda":
@@ -154,6 +158,11 @@ export function evaluate(exp: Object, env = Environment.empty()): Object {
                         throw new Error("Malformed lambda.");
                     }
                     return new Lambda(variables, exp.slice(2), env);
+                case "set":
+                    if (exp.length !== 3 || !symbol(exp[1])) {
+                        throw new Error("Malformed set.");
+                    }
+                    return env.set(exp[1], evaluate(exp[2], env));
             }
         }
         return apply(evaluate(exp[0], env), evlis(exp.slice(1), env));
@@ -329,13 +338,6 @@ function boolean(o: Object): o is boolean { return typeof o === "boolean"; }
 function nil(o: Object): o is null { return o === null };
 function func(o: Object): o is Function { return o instanceof Function; }
 function primitive(o: Object): o is NativeFunction { return o instanceof NativeFunction; }
-
-function lookup(symbol: Symbol, env: Environment) {
-    if (!env.has(symbol)) {
-        throw new Error("Unbound variable.");
-    }
-    return env.get(symbol)!;
-}
 
 function prog(exps: List, env: Environment) {
     for (let i = 0; i < exps.length - 1; ++i) {

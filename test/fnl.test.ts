@@ -49,17 +49,41 @@ describe("evaluate", () => {
     test.each([
         {
             expr: `((lambda (a) (+ a 1)) 1)`,
-            env: Environment.from({ "+": new NativeFunction((a: number, b: number) => a + b)}),
+            env: Environment.from({ "+": new NativeFunction((a, b) => a + b)}),
             obj: 2
         },
         {
             expr: `(((lambda (a) (lambda (b) (+ a b))) 1) 2)`,
-            env: Environment.from({ "+": new NativeFunction((a: number, b: number) => a + b)}),
+            env: Environment.from({ "+": new NativeFunction((a, b) => a + b)}),
             obj: 3
         },
     ])("$expr", ({ expr, env, obj }) => {
         expect(evaluate(read(expr), env)).toStrictEqual(obj);
-    })
+    });
+
+    test.each([
+        { expr: `(do (set a 17) a)`, obj: 17 },
+        { expr: `(do (set a 17) (set a 13) a)`, obj: 13 },
+    ])("$expr", ({ expr, obj }) => {
+        expect(evaluate(read(expr))).toStrictEqual(obj);
+    });
+
+    test("fact", () => {
+        const env =  Environment.from({
+            "=": new NativeFunction((a, b) => a === b),
+            "-": new NativeFunction((a, b) => a - b),
+            "*": new NativeFunction((a, b) => a * b),
+        });
+        const expr = `
+            (do (set fact (lambda (n)
+                                  (if (= n 0)
+                                      1
+                                      (* n (fact (- n 1))))))
+                (fact 10))
+        `;
+
+        expect(evaluate(read(expr), env)).toStrictEqual(3628800);
+    });
 });
 
 describe("read", () => {
