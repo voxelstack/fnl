@@ -62,10 +62,46 @@ describe("evaluate", () => {
     });
 
     test.each([
-        { expr: `(do (set a 17) a)`, obj: 17 },
-        { expr: `(do (set a 17) (set a 13) a)`, obj: 13 },
+        { expr: `(let ((a 17)) a)`, obj: 17 },
+        { expr: `(let ((a 17) (b 13)) (+ a b))`, obj: 30 },
+        { expr: `(let ((a 17)) (let ((a 13)) a))`, obj: 13 },
+        { expr: `(let ((a 17) (b 13)) (let ((b 11)) (+ a b)))`, obj: 28 },
     ])("$expr", ({ expr, obj }) => {
-        expect(evaluate(read(expr))).toStrictEqual(obj);
+        const env =  Environment.from({
+            "+": new NativeFunction((a, b) => a + b),
+        });
+        expect(evaluate(read(expr), env)).toStrictEqual(obj);
+    });
+
+    test.each([
+        `(let ((a 1) (b a)))`
+    ])('%s', (expr) => {
+        expect(() => evaluate(read(expr))).toThrowError();
+    });
+
+    test.each([
+        { expr: `(letrec ((a 1) (b a)) b)` },
+    ])('$expr', ({ expr }) => {
+        expect(evaluate(read(expr))).toStrictEqual(1);
+    });
+
+    test.each([
+        { expr: `(do (def a 17) a)`, obj: 17 },
+        { expr: `(do (def a 17) (def b 13) (+ a b))`, obj: 30 },
+        { expr: `(do (def fib (lambda (n) (if (<= n 1) 1 (+ (fib (- n 2)) (fib (- n 1)))))) (fib 5))`, obj: 8 }
+    ])("$expr", ({ expr, obj }) => {
+        const env = Environment.from({
+            "+": new NativeFunction((a, b) => a + b),
+            "-": new NativeFunction((a, b) => a - b),
+            "<=": new NativeFunction((a, b) => a <= b),
+        });
+        expect(evaluate(read(expr), env)).toStrictEqual(obj);
+    });
+
+    test.each([
+        { expr: `(do (def a 17) (def a 13))` },
+    ])("$expr", ({ expr }) => {
+        expect(() => evaluate(read(expr))).toThrowError();
     });
 
     test("fact", () => {
@@ -75,13 +111,12 @@ describe("evaluate", () => {
             "*": new NativeFunction((a, b) => a * b),
         });
         const expr = `
-            (do (set fact (lambda (n)
-                                  (if (= n 0)
-                                      1
-                                      (* n (fact (- n 1))))))
-                (fact 10))
+            (letrec ((fact (lambda (n)
+              (if (= n 0)
+                1
+                (* n (fact (- n 1)))))))
+              (fact 10))
         `;
-
         expect(evaluate(read(expr), env)).toStrictEqual(3628800);
     });
 });

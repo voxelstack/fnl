@@ -97,12 +97,12 @@ export class Environment {
         this.parent = parent;
     }
 
-    static empty() {
-        return new Environment();
+    static empty(parent?: Environment) {
+        return new Environment(parent);
     }
 
-    static from(vars: Record<string, Object>) {
-        const env = Environment.empty();
+    static from(vars: Record<string, Object>, parent?: Environment) {
+        const env = Environment.empty(parent);
         // TODO I really shouldn't have a type called Object.
         for (const [key, value] of Object.entries(vars)) {
             env.set(Symbol.empty(key), value);
@@ -110,25 +110,25 @@ export class Environment {
         return env;
     }
 
-    delete(key: Symbol): boolean {
+    public extend(keys: Symbol[], values: List) {
+        keys.forEach((k, i) => this.set(k, values[i]));
+    }
+
+    public delete(key: Symbol): boolean {
         return this.data.delete(key.name) || !!this.parent?.delete(key);
     }
 
-    get(key: Symbol): Object | undefined {
+    public get(key: Symbol): Object | undefined {
         return this.data.get(key.name) ?? this.parent?.get(key);
     }
 
-    has(key: Symbol): boolean {
+    public has(key: Symbol): boolean {
         return this.data.has(key.name) || !!this.parent?.has(key);
     }
 
-    set(key: Symbol, value: Object): Object {
+    public set(key: Symbol, value: Object): Object {
         this.data.set(key.name, value);
         return value;
-    }
-
-    extend(keys: Symbol[], values: List) {
-        keys.forEach((k, i) => this.set(k, values[i]));
     }
 }
 
@@ -143,26 +143,61 @@ export function evaluate(exp: Object, env = Environment.empty()): Object {
         const fn = exp[0];
         if (symbol(fn)) {
             switch (fn.name) {
-                case "quote":
+                case "quote": {
                     return exp[1];
-                case "if":
+                }
+                case "if": {
                     if (exp.length !== 4) {
                         throw new Error("Malformed if.");
                     }
                     return evaluate(evaluate(exp[1], env) ? exp[2] : exp[3], env)
-                case "do":
+                }
+                case "do": {
                     return prog(exp.slice(1), env);
-                case "lambda":
+                }
+                case "lambda": {
                     const variables = exp[1];
                     if (!list(variables)) {
                         throw new Error("Malformed lambda.");
                     }
                     return new Lambda(variables, exp.slice(2), env);
-                case "set":
+                }
+                case "let": {
+                    if (exp.length < 2 || !list(exp[1])) {
+                        throw new Error("Malformed let.");
+                    }
+                    const innerEnv = Environment.from(exp[1].reduce((binds, bind) => {
+                        if (!list(bind) || bind.length !== 2 || !symbol(bind[0])) {
+                            throw new Error("Malformed let.")
+                        }
+                        // TODO My symbols aren't actually symbols.
+                        binds[bind[0].name] = evaluate(bind[1], env);
+                        return binds;
+                    }, {} as Record<string, Object>), env);
+                    return prog(exp.slice(2), innerEnv);
+                }
+                case "letrec": {
+                    if (exp.length < 2 || !list(exp[1])) {
+                        throw new Error("Malformed letrec.");
+                    }
+                    const innerEnv = Environment.empty(env);
+                    exp[1].forEach((bind) => {
+                        if (!list(bind) || bind.length !== 2 || !symbol(bind[0])) {
+                            throw new Error("Malformed letrec.")
+                        }
+                        innerEnv.set(bind[0], evaluate(bind[1], innerEnv));
+                    });
+                    return prog(exp.slice(2), innerEnv);
+                }
+                case "def": {
                     if (exp.length !== 3 || !symbol(exp[1])) {
-                        throw new Error("Malformed set.");
+                        throw new Error("Malformed def.");
+                    }
+                    if (env.has(exp[1])) {
+                        throw new Error("Cannot redefine.");
                     }
                     return env.set(exp[1], evaluate(exp[2], env));
+                }
             }
         }
         return apply(evaluate(exp[0], env), evlis(exp.slice(1), env));
