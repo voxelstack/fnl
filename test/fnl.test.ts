@@ -74,9 +74,23 @@ describe("evaluate", () => {
     });
 
     test.each([
-        `(let ((a 1) (b a)))`
-    ])('%s', (expr) => {
+        { expr: `(let ((a 1) (b a)))` },
+    ])('$expr', ({ expr }) => {
         expect(() => evaluate(read(expr))).toThrowError();
+    });
+
+    test.each([
+        { expr: `(set i 0)` },
+    ])('$expr', ({ expr }) => {
+        expect(() => evaluate(read(expr))).toThrowError();
+    });
+
+    test.each([
+        { expr: `(let ((a 0)) (set a 1) a)`, obj: 1 },
+        { expr: `(let ((a 0)) (let ((b 0)) (set a 1) a))`, obj: 1 },
+        { expr: `(let ((a 0)) (let ((b 0)) (set a 1)) a)`, obj: 0 },
+    ])('$expr', ({ expr, obj }) => {
+        expect(evaluate(read(expr))).toStrictEqual(obj);
     });
 
     test.each([

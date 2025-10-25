@@ -110,6 +110,10 @@ export class Environment {
         return env;
     }
 
+    public get root() {
+        return this.parent === undefined;
+    }
+
     public extend(keys: Symbol[], values: List) {
         keys.forEach((k, i) => this.set(k, values[i]));
     }
@@ -188,6 +192,18 @@ export function evaluate(exp: Object, env = Environment.empty()): Object {
                         innerEnv.set(bind[0], evaluate(bind[1], innerEnv));
                     });
                     return prog(exp.slice(2), innerEnv);
+                }
+                case "set": {
+                    if (env.root) {
+                        throw new Error("Cannot set globals.");
+                    }
+                    if (exp.length !== 3 || !symbol(exp[1])) {
+                        throw new Error("Malformed set.");
+                    }
+                    if (!env.has(exp[1])) {
+                        throw new Error(`Unbound variable ${exp[1].name}.`);
+                    }
+                    return env.set(exp[1], evaluate(exp[2], env));
                 }
                 case "def": {
                     if (exp.length !== 3 || !symbol(exp[1])) {
