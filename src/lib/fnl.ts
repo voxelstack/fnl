@@ -29,7 +29,7 @@ abstract class Function {
         }
     }
 
-    public abstract apply(values: List): Object;
+    public abstract apply(values: List, k: Continuation): void;
 }
 
 export class NativeFunction extends Function {
@@ -45,9 +45,9 @@ export class NativeFunction extends Function {
         return this.fn.length;
     }
 
-    public apply(values: List): Object {
+    public apply(values: List, k: Continuation): void {
         this.assertArity(values);
-        return this.fn(...values.map((v) => v));
+        k(this.fn(...values.map((v) => v)));
     }
 }
 
@@ -73,7 +73,7 @@ class Lambda extends Function {
         return this.variables.length;
     }
 
-    public apply(values: List): Object {
+    public apply(values: List, k: Continuation): void {
         this.assertArity(values);
 
         const newEnv = new Environment(this.env);
@@ -81,12 +81,13 @@ class Lambda extends Function {
             newEnv.set(variable, values[i])
         });
         
-        return prog(this.body, newEnv);
+        prog(this.body, newEnv, k);
     }
 }
 
-export type Atom = Function | Symbol | number | string | boolean | null; 
+export type Atom = Function | Continuation | Symbol | number | string | boolean | null; 
 export type Object = Atom | List;
+export type Continuation = (obj: Object) => void;
 
 export class Environment {
     private readonly data: Map<string, Object>;
@@ -137,88 +138,111 @@ export class Environment {
 }
 
 export function evaluate(exp: Object, env = Environment.empty()): Object {
+    let res: Object | undefined;
+    evaluate_k(exp, env, (obj) => res = obj);
+
+    if (res === undefined) {
+        throw new Error("Evaluate did not return.");
+    }
+
+    return res;
+}
+
+export function evaluate_k(exp: Object, env: Environment, k: Continuation): void {
     if (symbol(exp)) {
         const value = env.get(exp);
         if (value === undefined) {
             throw new Error(`Unbound variable ${exp.name}.`);
         }
-        return value;
+        k(value);
     } else if(list(exp)) {
-        const fn = exp[0];
-        if (symbol(fn)) {
-            switch (fn.name) {
-                case "quote": {
-                    return exp[1];
+        const car = exp[0];
+        if (symbol(car)) {
+            if (car.name === "quote") {
+                k(exp[1]);
+            } else if (car.name === "if") {
+                if (exp.length !== 4) {
+                    throw new Error("Malformed if.");
                 }
-                case "if": {
-                    if (exp.length !== 4) {
-                        throw new Error("Malformed if.");
+                evaluate_k(exp[1], env, (cond) => {
+                    if (!boolean(cond)) {
+                        throw new Error("Invalid condition");
                     }
-                    return evaluate(evaluate(exp[1], env) ? exp[2] : exp[3], env)
+                    evaluate_k(cond === true ? exp[2] : exp[3], env, k);
+                });
+            } else if (car.name === "do") {
+                prog(exp.slice(1), env, k);
+            } else if (car.name === "lambda") {
+                const variables = exp[1];
+                if (!list(variables)) {
+                    throw new Error("Malformed lambda.");
                 }
-                case "do": {
-                    return prog(exp.slice(1), env);
+                k(new Lambda(variables, exp.slice(2), env));
+            } else if (car.name === "let") {
+                if (exp.length < 2 || !list(exp[1])) {
+                    throw new Error("Malformed let.");
                 }
-                case "lambda": {
-                    const variables = exp[1];
-                    if (!list(variables)) {
-                        throw new Error("Malformed lambda.");
+                const innerEnv = Environment.from(exp[1].reduce((binds, bind) => {
+                    if (!list(bind) || bind.length !== 2 || !symbol(bind[0])) {
+                        throw new Error("Malformed let.")
                     }
-                    return new Lambda(variables, exp.slice(2), env);
+                    // TODO My symbols aren't actually symbols.
+                    const key = bind[0].name;
+                    evaluate_k(bind[1], env, (value) => { binds[key] = value });
+                    return binds;
+                }, {} as Record<string, Object>), env);
+                prog(exp.slice(2), innerEnv, k);
+            } else if (car.name === "letrec") {
+                if (exp.length < 2 || !list(exp[1])) {
+                    throw new Error("Malformed letrec.");
                 }
-                case "let": {
-                    if (exp.length < 2 || !list(exp[1])) {
-                        throw new Error("Malformed let.");
+                const innerEnv = Environment.empty(env);
+                exp[1].forEach((bind) => {
+                    if (!list(bind) || bind.length !== 2 || !symbol(bind[0])) {
+                        throw new Error("Malformed letrec.")
                     }
-                    const innerEnv = Environment.from(exp[1].reduce((binds, bind) => {
-                        if (!list(bind) || bind.length !== 2 || !symbol(bind[0])) {
-                            throw new Error("Malformed let.")
-                        }
-                        // TODO My symbols aren't actually symbols.
-                        binds[bind[0].name] = evaluate(bind[1], env);
-                        return binds;
-                    }, {} as Record<string, Object>), env);
-                    return prog(exp.slice(2), innerEnv);
+                    const key = bind[0];
+                    evaluate_k(bind[1], innerEnv, (value) => { innerEnv.set(key, value); });
+                });
+                prog(exp.slice(2), innerEnv, k);
+            } else if (car.name === "set") {
+                if (env.root) {
+                    throw new Error("Cannot set globals.");
                 }
-                case "letrec": {
-                    if (exp.length < 2 || !list(exp[1])) {
-                        throw new Error("Malformed letrec.");
-                    }
-                    const innerEnv = Environment.empty(env);
-                    exp[1].forEach((bind) => {
-                        if (!list(bind) || bind.length !== 2 || !symbol(bind[0])) {
-                            throw new Error("Malformed letrec.")
-                        }
-                        innerEnv.set(bind[0], evaluate(bind[1], innerEnv));
-                    });
-                    return prog(exp.slice(2), innerEnv);
+                if (exp.length !== 3 || !symbol(exp[1])) {
+                    throw new Error("Malformed set.");
                 }
-                case "set": {
-                    if (env.root) {
-                        throw new Error("Cannot set globals.");
-                    }
-                    if (exp.length !== 3 || !symbol(exp[1])) {
-                        throw new Error("Malformed set.");
-                    }
-                    if (!env.has(exp[1])) {
-                        throw new Error(`Unbound variable ${exp[1].name}.`);
-                    }
-                    return env.set(exp[1], evaluate(exp[2], env));
+                if (!env.has(exp[1])) {
+                    throw new Error(`Unbound variable ${exp[1].name}.`);
                 }
-                case "def": {
-                    if (exp.length !== 3 || !symbol(exp[1])) {
-                        throw new Error("Malformed def.");
-                    }
-                    if (env.has(exp[1])) {
-                        throw new Error("Cannot redefine.");
-                    }
-                    return env.set(exp[1], evaluate(exp[2], env));
+                k(env.set(exp[1], evaluate(exp[2], env)));
+            } else if (car.name === "def") {
+                if (exp.length !== 3 || !symbol(exp[1])) {
+                    throw new Error("Malformed def.");
                 }
-            }
+                if (env.has(exp[1])) {
+                    throw new Error("Cannot redefine.");
+                }
+                k(env.set(exp[1], evaluate(exp[2], env)));
+            } else if (car.name === "callcc") {
+                if (exp.length !== 2) {
+                    throw new Error("Malformed calcc.");
+                }
+                evaluate_k(exp[1], env, (lambda) => {
+                    if (!func(lambda)) {
+                        throw new Error("Malformed callcc.");
+                    }
+                    apply(lambda, [k], env, k);
+                });
+            } else {
+                apply(exp[0], exp.slice(1), env, k);
+            }            
+        } else {
+            apply(exp[0], exp.slice(1), env, k);
         }
-        return apply(evaluate(exp[0], env), evlis(exp.slice(1), env));
-    }
-    return exp;
+    } else {
+        k(exp);
+    }    
 }
 
 export function read(input: string): Object {
@@ -389,21 +413,45 @@ function boolean(o: Object): o is boolean { return typeof o === "boolean"; }
 function nil(o: Object): o is null { return o === null };
 function func(o: Object): o is Function { return o instanceof Function; }
 function primitive(o: Object): o is NativeFunction { return o instanceof NativeFunction; }
+function continuation(o: Object): o is Continuation { return typeof o === "function" };
 
-function prog(exps: List, env: Environment) {
+function prog(exps: List, env: Environment, k: Continuation): void {
     for (let i = 0; i < exps.length - 1; ++i) {
-        evaluate(exps[i], env);
+        let curr: Object | undefined;
+        evaluate_k(exps[i], env, (val) => curr = val);
+
+        if (curr === undefined) {
+            // If a continuation was not called, we must have jumped.
+            return;
+        }
     }
-    return evaluate(exps[exps.length - 1] ?? null, env);
+    evaluate_k(exps[exps.length - 1] ?? null, env, k);
 }
 
-function evlis(exps: List, env: Environment) {
-    return exps.map((exp) => evaluate(exp, env))
-}
+function apply(fn: Object, args: List, env: Environment, k: Continuation) {
+    evaluate_k(fn, env, (fn) => {
+        if (func(fn)) {
+            const vals: Object[] = [];
 
-function apply(fn: Object, values: List): Object {
-    if (func(fn)) {
-        return fn.apply(values);
-    }
-    throw new Error("Not a function.");
+            for (const exp of args) {
+                let curr: Object | undefined;
+                evaluate_k(exp, env, (val) => curr = val);
+
+                if (curr === undefined) {
+                    // If a continuation was not called, we must have jumped.
+                    return;
+                }
+                vals.push(curr);
+            }
+
+            fn.apply(vals, k);
+        } else if (continuation(fn)) {
+            if (args.length !== 1) {
+                throw new Error("Can only apply continuation to Object.");
+            }
+            evaluate_k(args[0], env, fn);
+        } else {
+            throw new Error("Cannot apply.");
+        }
+    });
 }

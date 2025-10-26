@@ -133,6 +133,28 @@ describe("evaluate", () => {
         `;
         expect(evaluate(read(expr), env)).toStrictEqual(3628800);
     });
+
+    test.each([
+        { expr: `(callcc (lambda (k) (k 22)))`, obj: 22 },
+        { expr: `(callcc (lambda (k) (+ 1 (k 22))))`, obj: 22 },
+        { expr: `(callcc (lambda (k) (+ (k 13) (k 17))))`, obj: 13 },
+        { expr: `(callcc (lambda (k) (let ((a 0)) (set a 1) (k 0) a)))`, obj: 0 },
+        { expr: `(let ((a 0)) (callcc (lambda (k) (let ((a 1)) (k 2)))) a)`, obj: 0 },
+    ])("$expr", ({ expr, obj }) => {
+        const env =  Environment.from({
+            "+": new NativeFunction((a, b) => a + b),
+        });
+        expect(evaluate(read(expr), env)).toStrictEqual(obj);
+    });
+    
+    test.each([
+        { expr: `(callcc (lambda (k) (k 1 2 3)))` },
+        { expr: `(callcc (lambda (k l m) (k 0)))` },
+        { expr: `(callcc (0))` },
+        { expr: `(callcc)` },
+    ])("$expr", ({ expr }) => {
+        expect(() => evaluate(read(expr))).toThrowError();
+    });
 });
 
 describe("read", () => {
