@@ -1,4 +1,4 @@
-import { parse, tokenize } from "./parser";
+import { parse, Reader, tokenize, type ParserMacros, type ReaderMacros } from "./parser";
 
 export class Symbol {
     public readonly name: string;
@@ -257,11 +257,12 @@ export function evaluate_k(exp: Object, env: Environment, k: Continuation): void
     }    
 }
 
-export function read(input: string): Object {
-    const tokens = tokenize(input);
-    const obj = parse(tokens);
+export function read(input: string, readerMacros?: ReaderMacros, parserMacros?: ParserMacros): Object {
+    const characterReader = new Reader(input.split(""));
+    const tokenReader = tokenize(characterReader, readerMacros);
+    const obj = parse(tokenReader, parserMacros);
 
-    if (!tokens.done()) {
+    if (!tokenReader.done) {
         throw new Error("Unexpected token.");
     }
 

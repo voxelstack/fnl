@@ -10,154 +10,174 @@ export type TokenType =
     | "nil"
 ;
 
+export type TokenValue =
+    | Symbol
+    | number
+    | string
+    | boolean
+    | null
+;
+
 export interface Token {
     type: TokenType;
-    value: string;
+    value: TokenValue;
     span: [number, number];
 }
 
-class TokenReader implements Iterator<Token> {
-    private readonly tokens: Token[];
+export class Reader<T> {
+    private readonly collection: T[];
     private nextIndex: number;
 
-    constructor(tokens: Token[]) {
-        this.tokens = tokens;
+    constructor(collection: T[]) {
+        this.collection = collection;
         this.nextIndex = 0;
     }
 
-    done(): boolean {
-        return this.nextIndex >= this.tokens.length;
+    public get cursor() {
+        return this.nextIndex;
     }
 
-    next(): IteratorResult<Token> {
-        if (this.done()) {
-            // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#value
-            return { done: true } as IteratorResult<Token>;
+    public get done(): boolean {
+        return this.nextIndex >= this.collection.length;
+    }
+
+    next(): T {
+        if (this.done) {
+            throw new Error("Called next on a finished reader.");
         }
-        return { value: this.tokens[this.nextIndex++], done: false };
+        return this.collection[this.nextIndex++];
     }
 
-    peek(lookahead = 0): Token | undefined {
-        return this.tokens[this.nextIndex + lookahead];
+    peek(lookahead = 0): T | undefined {
+        return this.collection[this.nextIndex + lookahead];
     }
 
-    skip() {
-        ++this.nextIndex;
+    advance(n = 1) {
+        this.nextIndex += n;
     }
 }
 
-export function tokenize(input: string): TokenReader {
+export type ReaderMacro = (input: Reader<string>) => Token[];
+export type ReaderMacros = Record<string, ReaderMacro>;
+
+export function tokenize(input: Reader<string>, readerMacros: ReaderMacros = {}): Reader<Token> {
     const symbols: Map<string, Symbol> = new Map();
-    const tokens: Token[] = [];
+    const macroNames = readerMacros ? Object.keys(readerMacros).sort((a, b) => b.length - a.length) : [];
     
-    let i = 0;
-    const eof = (lookAhead = 0) => i + lookAhead >= input.length;
-    const peek = (lookAhead = 0) => input[i + lookAhead];
-    while (!eof()) {
-        const next = peek();
-        if (whitespace(next)) {
-            ++i;
+    const tokens: Token[] = [];
+    while (!input.done) {
+        const start = input.cursor;
+        const curr = input.next();
+    
+        function produce(type: Token["type"], value: TokenValue) {
+            tokens.push({ type, value, span: [start, input.cursor - 1] });
+        }
+
+        if (whitespace(curr)) {
             continue;
         }
 
-        let len: number;
-        let token: Token;
-        if (next === "(") {
-            len = 1;
-            token = produce("open");
-        } else if (next === ")") {
-            len = 1;
-            token = produce("close");
-        } else if (next === "\"") {
-            len = readWhile((c) => c !== "\"", 1) + 1;
-            token = produce("string", (s) => s.slice(1, -1));
-        } else if (numeric(next) || (next === "-" && !eof(1) && numeric(peek(1)))) {
-            len = readWhile(numeric, next === "-" ? 2 : 0);
-            if (peek(len) === ".") {
-                ++len;
-                if (eof(len) || !numeric(peek(len))) {
+        if (curr === "(") {
+            produce("open", "(");
+        } else if (curr === ")") {
+            produce("close", ")");
+        } else if (curr === "\"") {
+            const str = readWhile((c) => c !== "\"");
+            input.advance(); // Skip closing quote.
+            produce("string", str);
+        } else if (numeric(curr) || (curr === "-" && numeric(input.peek()))) {
+            let num = readWhile(numeric, curr);
+
+            if (input.peek() === ".") {
+                num += input.next();
+                if (!numeric(input.peek())) {
                     throw new Error("Missing decimal part.");
                 }
-                len = readWhile(numeric, len);
+                num = readWhile(numeric, num);
             }
-            token = produce("number", Number);
-        } else if (tryWord("true")) {
-            len = "true".length;
-            token = produce("boolean", () => true);
-        } else if (tryWord("false")) {
-            len = "false".length;
-            token = produce("boolean", () => false);
-        } else if (tryWord("nil")) {
-            len = "nil".length;
-            token = produce("nil", () => null);
-        } else if (valid(next)) {
-            len = readWhile(valid);
-            token = produce("symbol", (name) => {
-                if (symbols.has(name)) {
-                    return symbols.get(name);
+            produce("number", Number(num));
+        } else if (curr === "t" && tryWord("rue", true)) {
+            produce("boolean", true);
+        } else if (curr === "f" && tryWord("alse", true)) {
+            produce("boolean", false);
+        } else if (curr === "n" && tryWord("il", true)) {
+            produce("nil", null);
+        } else if (valid(curr)) {
+            for (const name of macroNames) {
+                if (curr === name[0] && tryWord(name.slice(1), false)) {
+                    tokens.push(...readerMacros[name](input));
+                    continue;
                 }
+            }
 
-                const symbol = Symbol.empty(name);
+            const name = readWhile(valid, curr);
+
+            let symbol = symbols.get(name);
+            if (symbol === undefined) {
+                symbol = Symbol.empty(name);
                 symbols.set(name, symbol);
-                return symbol;
-            });
+            }                
+            
+            produce("symbol", symbol);
         } else {
             throw new Error("Cannot read.");
         }
-        i += len;
-        tokens.push(token);
 
-        // https://www.lispworks.com/documentation/HyperSpec/Body/02_ac.htm
-        function whitespace(c: string) {
-            return (c === "\n" || c == " ");
-        }
-        function latin(c: string) {
-            return (c >= "a" && c <= "z") || (c >= "A" && c <= "Z");
-        }
-        function numeric(c: string) {
-            return (c >= "0" && c <= "9");
-        }
-        function special(c: string) {
-            // Omit parenthesis and quotes, they are delimiters.
-            return "!$',_-./:;?+<=>#%&*@[\\]{|}`^~".includes(c);
-        }
-        function terminator(c: string) {
-            return whitespace(c) || c === ")";
-        }
-        function valid(c: string) {
-            return latin(c) || numeric(c) || special(c);
-        }
-        function tryWord(word: string) {
+        function tryWord(word: string, terminated: boolean) {
             let j;
-            for (j = 0; !eof(j) && j < word.length; ++j) {
-                if (word[j] !== peek(j)) return false;
+            for (j = 0; j < word.length; ++j) {
+                if (word[j] !== input.peek(j)) {
+                    return false;
+                }
+            }
+            if (terminated && !terminator(input.peek(j))) {
+                return false;
             }
 
-            return eof(j) || terminator(peek(j));
+            input.advance(j);
+            return true;
         }
-        function readWhile(cond: (c: string) => boolean, len = 0) {
-            while (!eof(len) && cond(peek(len))) ++len;
-            return len;
-        }
-        function produce(type: Token["type"], parse: (value: string) => any = s => s) {
-            return {
-                type,
-                value: parse(input.slice(i, i + len)),
-                span: [i, i + len]
-            } as Token;
+        function readWhile(cond: (c?: string) => boolean, str = "") {
+            while (!input.done && cond(input.peek())) {
+                str += input.next();
+            }
+            return str;
         }
     }
 
-    return new TokenReader(tokens);
+    return new Reader(tokens);
 }
 
-export function parse(input: TokenReader): Object {
-    let { value: token, done } = input.next();
+// https://www.lispworks.com/documentation/HyperSpec/Body/02_ac.htm
+function whitespace(c?: string) {
+    return c !== undefined && (c === "\n" || c == " ");
+}
+function latin(c?: string) {
+    return c !== undefined && ((c >= "a" && c <= "z") || (c >= "A" && c <= "Z"));
+}
+function numeric(c?: string) {
+    return c !== undefined && c >= "0" && c <= "9";
+}
+function special(c?: string) {
+    // Omit parenthesis and quotes, they are delimiters.
+    return c !== undefined && "!$',_-./:;?+<=>#%&*@[\\]{|}`^~".includes(c);
+}
+function terminator(c?: string) {
+    return c === undefined || whitespace(c) || c === ")";
+}
+function valid(c?: string) {
+    return c !== undefined && (latin(c) || numeric(c) || special(c));
+}
 
-    if (done) {
+export type ParserMacro = (input: Reader<Token>) => Object;
+export type ParserMacros = Record<string, ParserMacro>;
+
+export function parse(input: Reader<Token>, parserMacros?: ParserMacros): Object {
+    if (input.done) {
         return null;
     }
 
+    let token: Token | undefined = input.next();
     switch (token.type) {
         case "open":
             const list = new List();
@@ -167,15 +187,21 @@ export function parse(input: TokenReader): Object {
                 if (token.type === "open") {
                     list.push(parse(input));
                 } else if (token.type === "close") {
-                    input.skip();
+                    input.advance();
                     return list;
                 } else {
-                    input.skip();
-                    list.push(token.value);
+                    list.push(input.next().value);
                 }
             }
             throw new Error("Unterminated list.");
-        case "symbol":
+        case "symbol": {
+            const symbol = token.value as Symbol;
+            const macro = parserMacros?.[symbol.name];
+            if (macro !== undefined) {
+                return macro(input);
+            }
+            return symbol;
+        }
         case "number":
         case "string":
         case "boolean":
