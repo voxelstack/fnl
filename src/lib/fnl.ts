@@ -8,17 +8,11 @@ export class Symbol {
     public static empty(name: string) {
         return new Symbol(name);
     }
-
-    public toString() {
-        return this.name;
-    }
 }
 
-export class List extends Array<Object> {
-    public toString() {
-        return `(${this.map((o): string => o === null ? 'nil' : o.toString()).join(" ")})`
-    }
-}
+export class List extends Array<Object> { }
+
+export class Dictionary extends Map<Exclude<Object, null>, Object> { }
 
 abstract class Function {
     public abstract get arity(): number;
@@ -85,9 +79,9 @@ class Lambda extends Function {
     }
 }
 
-export type Atom = Function | Continuation | Symbol | number | string | boolean | null; 
-export type Object = Atom | List;
 export type Continuation = (obj: Object) => void;
+export type Atom = Function | Continuation | Dictionary | Symbol | number | string | boolean | null;
+export type Object = Atom | List;
 
 export class Environment {
     private readonly data: Map<string, Object>;
@@ -234,6 +228,22 @@ export function evaluate_k(exp: Object, env: Environment, k: Continuation): void
                     }
                     apply(lambda, [k], env, k);
                 });
+            } else if (car.name === "dict") {
+                if (exp.length % 2 !== 1) {
+                    throw new Error("Malformed map.");
+                }
+                const dict = new Dictionary();
+                for (let i = 1; i < exp.length; i += 2) {
+                    evaluate_k(exp[i], env, (key) => {
+                        evaluate_k(exp[i + 1], env, (value) => {
+                            if (key === null) {
+                                throw new Error("Cannot use nil as a key.");
+                            }
+                            dict.set(key, value);
+                        });
+                    });
+                }
+                k(dict);
             } else {
                 apply(exp[0], exp.slice(1), env, k);
             }            
@@ -405,6 +415,7 @@ export function read(input: string): Object {
 }
 
 function list(o: Object): o is List { return o instanceof List; }
+function dictionary(o: Object): o is Dictionary { return o instanceof Dictionary; }
 function atom(o: Object): o is Atom { return !list(o); }
 function symbol(o: Object): o is Symbol { return o instanceof Symbol; }
 function number(o: Object): o is number { return typeof o === "number"; }

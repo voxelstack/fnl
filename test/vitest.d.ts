@@ -3,6 +3,7 @@ import "vitest";
 interface CustomMatchers<R = unknown> {
     toMatchList: (expected: any[]) => R;
     toMatchEmptySymbol: (expected: string) => R;
+    toMatchDictionary: (expected: Record<string | number, any> | Map<any, any>) => R;
 }
 
 declare module "vitest" {

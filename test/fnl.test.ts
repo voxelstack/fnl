@@ -155,6 +155,14 @@ describe("evaluate", () => {
     ])("$expr", ({ expr }) => {
         expect(() => evaluate(read(expr))).toThrowError();
     });
+
+    test.each([
+        { expr: `(dict "a" 0 "b" 1 "c" 2)`, obj: { a: 0, b: 1, c: 2 } },
+        { expr: `(dict "a" 0 "b" 1 "c" (dict "d" 2 "e" 3))`, obj: { a: 0, b: 1, c: { d: 2, e: 3} } },
+        { expr: `(dict "a" (dict "b" 1) "c" 2 "d" (dict "e" 3 "f" 4))`, obj: { a: { b: 1 }, c: 2, d: { e: 3, f: 4 } } },
+    ])("$expr", ({ expr, obj }) => {
+        expect(evaluate(read(expr))).toMatchDictionary(obj);
+    });
 });
 
 describe("read", () => {
