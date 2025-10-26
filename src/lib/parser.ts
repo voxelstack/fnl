@@ -103,11 +103,17 @@ export function tokenize(input: Reader<string>, readerMacros: ReaderMacros = {})
         } else if (curr === "n" && tryWord("il", true)) {
             produce("nil", null);
         } else if (valid(curr)) {
+            let macroHandler: ReaderMacro | undefined;
             for (const name of macroNames) {
                 if (curr === name[0] && tryWord(name.slice(1), false)) {
-                    tokens.push(...readerMacros[name](input));
-                    continue;
+                    macroHandler = readerMacros[name];
+                    break;
                 }
+            }
+
+            if (macroHandler) {
+                tokens.push(...macroHandler(input));
+                continue;
             }
 
             const name = readWhile(valid, curr);
@@ -169,10 +175,10 @@ function valid(c?: string) {
     return c !== undefined && (latin(c) || numeric(c) || special(c));
 }
 
-export type ParserMacro = (input: Reader<Token>) => Object;
+export type ParserMacro = (input: Reader<Token>, macros: ParserMacros) => Object;
 export type ParserMacros = Record<string, ParserMacro>;
 
-export function parse(input: Reader<Token>, parserMacros?: ParserMacros): Object {
+export function parse(input: Reader<Token>, parserMacros: ParserMacros = {}): Object {
     if (input.done) {
         return null;
     }
@@ -184,13 +190,11 @@ export function parse(input: Reader<Token>, parserMacros?: ParserMacros): Object
 
             // When at the start of a list, the recursive call will expect the (, so peek instead of next.
             while (token = input.peek()) {
-                if (token.type === "open") {
-                    list.push(parse(input));
-                } else if (token.type === "close") {
+                if (token.type === "close") {
                     input.advance();
                     return list;
                 } else {
-                    list.push(input.next().value);
+                    list.push(parse(input, parserMacros));
                 }
             }
             throw new Error("Unterminated list.");
@@ -198,7 +202,7 @@ export function parse(input: Reader<Token>, parserMacros?: ParserMacros): Object
             const symbol = token.value as Symbol;
             const macro = parserMacros?.[symbol.name];
             if (macro !== undefined) {
-                return macro(input);
+                return macro(input, parserMacros);
             }
             return symbol;
         }

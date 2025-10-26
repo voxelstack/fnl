@@ -76,6 +76,8 @@ function formatAsList(arr: any[]) {
     return `(${arr.map((o): string => {
         if (o === null) {
             return 'nil';
+        } else if (o instanceof Symbol) {
+            return o.name;
         } else if (listLike(o)) {
             return formatAsList(o);
         } else if (dictionaryLike(o)) {
