@@ -1,6 +1,6 @@
-import type { Atom, Continuation, Object } from "./types";
+import type { Atom, Continuation, Expression } from "./types";
 
-export function evaluate_k(exp: Object, env: Environment, k: Continuation): void {
+export function evaluate_k(exp: Expression, env: Environment, k: Continuation): void {
     if (symbol(exp)) {
         const value = env.get(exp);
         if (value === undefined) {
@@ -42,7 +42,7 @@ export function evaluate_k(exp: Object, env: Environment, k: Continuation): void
                     const key = bind[0].name;
                     evaluate_k(bind[1], env, (value) => { binds[key] = value });
                     return binds;
-                }, {} as Record<string, Object>), env);
+                }, {} as Record<string, Expression>), env);
                 prog(exp.slice(2), innerEnv, k);
             } else if (car.name === "letrec") {
                 if (exp.length < 2 || !list(exp[1])) {
@@ -122,7 +122,7 @@ export function evaluate_k(exp: Object, env: Environment, k: Continuation): void
 }
 
 export class Environment {
-    private readonly data: Map<string, Object>;
+    private readonly data: Map<string, Expression>;
     private readonly parent?: Environment;
 
     constructor(parent?: Environment) {
@@ -134,11 +134,11 @@ export class Environment {
         return new Environment(parent);
     }
 
-    static from(vars: Record<string, Object>, parent?: Environment) {
+    static from(vars: Record<string, Expression>, parent?: Environment) {
         const env = Environment.empty(parent);
         // TODO I really shouldn't have a type called Object.
         for (const [key, value] of Object.entries(vars)) {
-            env.set(Symbol.empty(key), value);
+            env.set(Identifier.empty(key), value);
         }
         return env;
     }
@@ -147,29 +147,29 @@ export class Environment {
         return this.parent === undefined;
     }
 
-    public extend(keys: Symbol[], values: List) {
+    public extend(keys: Identifier[], values: List) {
         keys.forEach((k, i) => this.set(k, values[i]));
     }
 
-    public delete(key: Symbol): boolean {
+    public delete(key: Identifier): boolean {
         return this.data.delete(key.name) || !!this.parent?.delete(key);
     }
 
-    public get(key: Symbol): Object | undefined {
+    public get(key: Identifier): Expression | undefined {
         return this.data.get(key.name) ?? this.parent?.get(key);
     }
 
-    public has(key: Symbol): boolean {
+    public has(key: Identifier): boolean {
         return this.data.has(key.name) || !!this.parent?.has(key);
     }
 
-    public set(key: Symbol, value: Object): Object {
+    public set(key: Identifier, value: Expression): Expression {
         this.data.set(key.name, value);
         return value;
     }
 }
 
-export abstract class Function {
+export abstract class Procedure {
     public abstract get arity(): number;
 
     protected assertArity(values: List) {
@@ -181,7 +181,7 @@ export abstract class Function {
     public abstract apply(values: List, k: Continuation): void;
 }
 
-export class NativeFunction extends Function {
+export class NativeFunction extends Procedure {
     private readonly fn: (...args: any[]) => any;
 
     constructor(fn: (...args: any[]) => any) {
@@ -200,8 +200,8 @@ export class NativeFunction extends Function {
     }
 }
 
-export class Lambda extends Function {
-    private readonly variables: Symbol[];
+export class Lambda extends Procedure {
+    private readonly variables: Identifier[];
     private readonly body: List;
     private readonly env: Environment;
 
@@ -209,7 +209,7 @@ export class Lambda extends Function {
         super();
 
         this.variables = variables.map((el) => {
-            if (!(el instanceof Symbol)) {
+            if (!(el instanceof Identifier)) {
                 throw new Error("Variables on function definition must be list of symbols.");            
             }
             return el;
@@ -234,7 +234,7 @@ export class Lambda extends Function {
     }
 }
 
-export class Symbol {
+export class Identifier {
     public readonly name: string;
 
     constructor(name: string) {
@@ -242,21 +242,21 @@ export class Symbol {
     }
 
     public static empty(name: string) {
-        return new Symbol(name);
+        return new Identifier(name);
     }
 }
 
-export class List extends Array<Object> {
+export class List extends Array<Expression> {
 
 }
 
-export class Dictionary extends Map<Exclude<Object, null>, Object> {
+export class Dictionary extends Map<Exclude<Expression, null>, Expression> {
 
 }
 
 export function prog(exps: List, env: Environment, k: Continuation): void {
     for (let i = 0; i < exps.length - 1; ++i) {
-        let curr: Object | undefined;
+        let curr: Expression | undefined;
         evaluate_k(exps[i], env, (val) => curr = val);
 
         if (curr === undefined) {
@@ -267,13 +267,13 @@ export function prog(exps: List, env: Environment, k: Continuation): void {
     evaluate_k(exps[exps.length - 1] ?? null, env, k);
 }
 
-function apply(fn: Object, args: List, env: Environment, k: Continuation) {
+function apply(fn: Expression, args: List, env: Environment, k: Continuation) {
     evaluate_k(fn, env, (fn) => {
         if (func(fn)) {
-            const vals: Object[] = [];
+            const vals: Expression[] = [];
 
             for (const exp of args) {
-                let curr: Object | undefined;
+                let curr: Expression | undefined;
                 evaluate_k(exp, env, (val) => curr = val);
 
                 if (curr === undefined) {
@@ -295,14 +295,14 @@ function apply(fn: Object, args: List, env: Environment, k: Continuation) {
     });
 }
 
-function list(o: Object): o is List { return o instanceof List; }
-function dictionary(o: Object): o is Dictionary { return o instanceof Dictionary; }
-function atom(o: Object): o is Atom { return !list(o); }
-function symbol(o: Object): o is Symbol { return o instanceof Symbol; }
-function number(o: Object): o is number { return typeof o === "number"; }
-function string(o: Object): o is string { return typeof o === "string"; }
-function boolean(o: Object): o is boolean { return typeof o === "boolean"; }
-function nil(o: Object): o is null { return o === null };
-function func(o: Object): o is Function { return o instanceof Function; }
-function primitive(o: Object): o is NativeFunction { return o instanceof NativeFunction; }
-function continuation(o: Object): o is Continuation { return typeof o === "function" };
+function list(o: Expression): o is List { return o instanceof List; }
+function dictionary(o: Expression): o is Dictionary { return o instanceof Dictionary; }
+function atom(o: Expression): o is Atom { return !list(o); }
+function symbol(o: Expression): o is Identifier { return o instanceof Identifier; }
+function number(o: Expression): o is number { return typeof o === "number"; }
+function string(o: Expression): o is string { return typeof o === "string"; }
+function boolean(o: Expression): o is boolean { return typeof o === "boolean"; }
+function nil(o: Expression): o is null { return o === null };
+function func(o: Expression): o is Procedure { return o instanceof Procedure; }
+function primitive(o: Expression): o is NativeFunction { return o instanceof NativeFunction; }
+function continuation(o: Expression): o is Continuation { return typeof o === "function" };

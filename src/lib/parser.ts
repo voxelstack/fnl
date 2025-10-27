@@ -1,6 +1,6 @@
-import { List, Symbol } from "./interpreter";
+import { List, Identifier } from "./interpreter";
 import { Reader } from "./reader";
-import type { Atom, Object, ParserMacros, ReaderMacro, ReaderMacros } from "./types";
+import type { Atom, Expression, ParserMacros, ReaderMacro, ReaderMacros } from "./types";
 
 export type TokenType =
     | "open"
@@ -13,7 +13,7 @@ export type TokenType =
 ;
 
 export type TokenValue =
-    | Symbol
+    | Identifier
     | number
     | string
     | boolean
@@ -27,7 +27,7 @@ export interface Token {
 }
 
 export function tokenize(input: Reader<string>, readerMacros: ReaderMacros = {}): Reader<Token> {
-    const symbols: Map<string, Symbol> = new Map();
+    const symbols: Map<string, Identifier> = new Map();
     const macroNames = readerMacros ? Object.keys(readerMacros).sort((a, b) => b.length - a.length) : [];
     
     const tokens: Token[] = [];
@@ -86,7 +86,7 @@ export function tokenize(input: Reader<string>, readerMacros: ReaderMacros = {})
 
             let symbol = symbols.get(name);
             if (symbol === undefined) {
-                symbol = Symbol.empty(name);
+                symbol = Identifier.empty(name);
                 symbols.set(name, symbol);
             }                
             
@@ -120,7 +120,7 @@ export function tokenize(input: Reader<string>, readerMacros: ReaderMacros = {})
     return new Reader(tokens);
 }
 
-export function parse(input: Reader<Token>, parserMacros: ParserMacros = {}): Object {
+export function parse(input: Reader<Token>, parserMacros: ParserMacros = {}): Expression {
     if (input.done) {
         return null;
     }
@@ -141,7 +141,7 @@ export function parse(input: Reader<Token>, parserMacros: ParserMacros = {}): Ob
             }
             throw new Error("Unterminated list.");
         case "symbol": {
-            const symbol = token.value as Symbol;
+            const symbol = token.value as Identifier;
             const macro = parserMacros?.[symbol.name];
             if (macro !== undefined) {
                 return macro(input, parserMacros);

@@ -3,7 +3,7 @@ import { parse, tokenize } from "../src/lib/parser";
 import { stdParserMacros, stdReaderMacros } from "../src/lib/std";
 import { evaluate } from "../src/lib/fnl";
 import { Reader } from "../src/lib/reader";
-import { Symbol } from "../src/lib/interpreter";
+import { Identifier } from "../src/lib/interpreter";
 
 describe("reader macros", () => {
     function t(expr: string) {
@@ -29,21 +29,21 @@ describe("parser macros", () => {
 
     test("'literal", () => {
         const object = p(`'literal`);
-        expect(object).toMatchList([Symbol.empty("quote"), Symbol.empty("literal")]);
+        expect(object).toMatchList([Identifier.empty("quote"), Identifier.empty("literal")]);
     });
     test("'(+ 1 2)", () => {
         const object = p(`'(+ 1 2)`);
-        expect(object).toMatchList([Symbol.empty("quote"), [Symbol.empty("+"), 1, 2]]);
+        expect(object).toMatchList([Identifier.empty("quote"), [Identifier.empty("+"), 1, 2]]);
     });
 
     test(`#("a" 0 "b" 1)`, () => {
         const object = p(`#("a" 0 "b" 1)`);
-        expect(object).toMatchList([Symbol.empty("dict"), "a", 0, "b", 1]);
+        expect(object).toMatchList([Identifier.empty("dict"), "a", 0, "b", 1]);
         expect(evaluate(object)).toMatchDictionary({ a: 0, b: 1 });
     });
     test(`#("a" 0 "b" #("c" 1))`, () => {
         const object = p(`#("a" 0 "b" #("c" 1))`);
-        expect(object).toMatchList([Symbol.empty("dict"), "a", 0, "b", [Symbol.empty("dict"), "c", 1]]);
+        expect(object).toMatchList([Identifier.empty("dict"), "a", 0, "b", [Identifier.empty("dict"), "c", 1]]);
         expect(evaluate(object)).toMatchDictionary({ a: 0, b: { c: 1 }})
     });
 });

@@ -1,6 +1,6 @@
 import { expect } from "vitest";
-import { Dictionary, List, Symbol } from "../src/lib/interpreter";
-import type { Object } from "../src/lib/types";
+import { Dictionary, List, Identifier } from "../src/lib/interpreter";
+import type { Expression } from "../src/lib/types";
 
 expect.extend({
     toMatchList(received, expected) {
@@ -45,14 +45,14 @@ expect.extend({
     }
 });
 
-function symbolMatches(received: any, expected: Symbol) {
-    let pass = received instanceof Symbol;
+function symbolMatches(received: any, expected: Identifier) {
+    let pass = received instanceof Identifier;
     pass = pass && received.name === expected.name;
 
     return pass;
 }
 
-type ListLike = List | Object[];
+type ListLike = List | Expression[];
 
 function listMatches(received: any, expected: ListLike): boolean {
     if (!listLike(received) || received.length !== expected.length) {
@@ -63,7 +63,7 @@ function listMatches(received: any, expected: ListLike): boolean {
         const currReceived = received[i];
         if (currReceived instanceof List && listLike(currExpected)) {
             return pass && listMatches(currReceived, currExpected);
-        } else if (currReceived instanceof Symbol && currExpected instanceof Symbol) {
+        } else if (currReceived instanceof Identifier && currExpected instanceof Identifier) {
             return pass && symbolMatches(currReceived, currExpected);
         } else if (currReceived instanceof Dictionary && dictionaryLike(currExpected)) {
             return pass && dictionaryMatches(currReceived, currExpected);
@@ -77,7 +77,7 @@ function formatAsList(arr: any[]) {
     return `(${arr.map((o): string => {
         if (o === null) {
             return 'nil';
-        } else if (o instanceof Symbol) {
+        } else if (o instanceof Identifier) {
             return o.name;
         } else if (listLike(o)) {
             return formatAsList(o);
