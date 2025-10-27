@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { Environment, evaluate, NativeFunction, read, Symbol } from "../src/lib/fnl";
+import { Environment, NativeFunction, Symbol } from "../src/lib/interpreter";
+import { evaluate } from "../src/main";
+import { read } from "../src/lib/fnl";
 
 describe("evaluate", () => {
     test("symbol", () => {

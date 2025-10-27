@@ -1,7 +1,8 @@
-import { List, Symbol } from "./fnl";
-import { parse, type ParserMacros, type ReaderMacros } from "./parser";
+import { List, Symbol } from "./interpreter";
+import { parse } from "./parser";
+import type { ParserMacros, ReaderMacros } from "./types";
 
-export const globalReaderMacros: ReaderMacros = {
+export const stdReaderMacros: ReaderMacros = {
     "'": (input) => {
         return [{
             type: "symbol",
@@ -11,7 +12,7 @@ export const globalReaderMacros: ReaderMacros = {
     }
 };
 
-export const globalParserMacros: ParserMacros = {
+export const stdParserMacros: ParserMacros = {
     "'": (input, macros) => {
         const body = parse(input, macros);
         return new List(Symbol.empty("quote"), body);

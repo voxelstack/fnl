@@ -1,4 +1,6 @@
-import { List, Symbol, type Atom, type Object } from "./fnl";
+import { List, Symbol } from "./interpreter";
+import { Reader } from "./reader";
+import type { Atom, Object, ParserMacros, ReaderMacro, ReaderMacros } from "./types";
 
 export type TokenType =
     | "open"
@@ -23,42 +25,6 @@ export interface Token {
     value: TokenValue;
     span: [number, number];
 }
-
-export class Reader<T> {
-    private readonly collection: T[];
-    private nextIndex: number;
-
-    constructor(collection: T[]) {
-        this.collection = collection;
-        this.nextIndex = 0;
-    }
-
-    public get cursor() {
-        return this.nextIndex;
-    }
-
-    public get done(): boolean {
-        return this.nextIndex >= this.collection.length;
-    }
-
-    next(): T {
-        if (this.done) {
-            throw new Error("Called next on a finished reader.");
-        }
-        return this.collection[this.nextIndex++];
-    }
-
-    peek(lookahead = 0): T | undefined {
-        return this.collection[this.nextIndex + lookahead];
-    }
-
-    advance(n = 1) {
-        this.nextIndex += n;
-    }
-}
-
-export type ReaderMacro = (input: Reader<string>) => Token[];
-export type ReaderMacros = Record<string, ReaderMacro>;
 
 export function tokenize(input: Reader<string>, readerMacros: ReaderMacros = {}): Reader<Token> {
     const symbols: Map<string, Symbol> = new Map();
@@ -154,30 +120,6 @@ export function tokenize(input: Reader<string>, readerMacros: ReaderMacros = {})
     return new Reader(tokens);
 }
 
-// https://www.lispworks.com/documentation/HyperSpec/Body/02_ac.htm
-function whitespace(c?: string) {
-    return c !== undefined && (c === "\n" || c == " ");
-}
-function latin(c?: string) {
-    return c !== undefined && ((c >= "a" && c <= "z") || (c >= "A" && c <= "Z"));
-}
-function numeric(c?: string) {
-    return c !== undefined && c >= "0" && c <= "9";
-}
-function special(c?: string) {
-    // Omit parenthesis and quotes, they are delimiters.
-    return c !== undefined && "!$',_-./:;?+<=>#%&*@[\\]{|}`^~".includes(c);
-}
-function terminator(c?: string) {
-    return c === undefined || whitespace(c) || c === ")";
-}
-function valid(c?: string) {
-    return c !== undefined && (latin(c) || numeric(c) || special(c));
-}
-
-export type ParserMacro = (input: Reader<Token>, macros: ParserMacros) => Object;
-export type ParserMacros = Record<string, ParserMacro>;
-
 export function parse(input: Reader<Token>, parserMacros: ParserMacros = {}): Object {
     if (input.done) {
         return null;
@@ -213,4 +155,25 @@ export function parse(input: Reader<Token>, parserMacros: ParserMacros = {}): Ob
             return token.value as Atom;
     }
     throw new Error("Unexpected token.");
+}
+
+// https://www.lispworks.com/documentation/HyperSpec/Body/02_ac.htm
+function whitespace(c?: string) {
+    return c !== undefined && (c === "\n" || c == " ");
+}
+function latin(c?: string) {
+    return c !== undefined && ((c >= "a" && c <= "z") || (c >= "A" && c <= "Z"));
+}
+function numeric(c?: string) {
+    return c !== undefined && c >= "0" && c <= "9";
+}
+function special(c?: string) {
+    // Omit parenthesis and quotes, they are delimiters.
+    return c !== undefined && "!$',_-./:;?+<=>#%&*@[\\]{|}`^~".includes(c);
+}
+function terminator(c?: string) {
+    return c === undefined || whitespace(c) || c === ")";
+}
+function valid(c?: string) {
+    return c !== undefined && (latin(c) || numeric(c) || special(c));
 }

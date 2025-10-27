@@ -1,5 +1,6 @@
 import { expect } from "vitest";
-import { Dictionary, List, type Object, Symbol } from "../src/lib/fnl";
+import { Dictionary, List, Symbol } from "../src/lib/interpreter";
+import type { Object } from "../src/lib/types";
 
 expect.extend({
     toMatchList(received, expected) {

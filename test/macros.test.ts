@@ -1,11 +1,13 @@
 import { describe, test, expect } from "vitest";
-import { parse, Reader, tokenize } from "../src/lib/parser";
-import { globalParserMacros, globalReaderMacros } from "../src/lib/macros";
-import { evaluate, Symbol } from "../src/lib/fnl";
+import { parse, tokenize } from "../src/lib/parser";
+import { stdParserMacros, stdReaderMacros } from "../src/lib/std";
+import { evaluate } from "../src/lib/fnl";
+import { Reader } from "../src/lib/reader";
+import { Symbol } from "../src/lib/interpreter";
 
 describe("reader macros", () => {
     function t(expr: string) {
-        return tokenize(new Reader(expr.split("")), globalReaderMacros);
+        return tokenize(new Reader(expr.split("")), stdReaderMacros);
     }
 
     test("'", () => {
@@ -21,8 +23,8 @@ describe("reader macros", () => {
 
 describe("parser macros", () => {
     function p(expr: string) {
-        const tokens = tokenize(new Reader(expr.split("")), globalReaderMacros);
-        return parse(tokens, globalParserMacros);
+        const tokens = tokenize(new Reader(expr.split("")), stdReaderMacros);
+        return parse(tokens, stdParserMacros);
     }
 
     test("'literal", () => {
