@@ -57,12 +57,12 @@ export function evaluate_k(exp: Expression, env: Environment, k: Continuation): 
                     evaluate_k(bind[1], innerEnv, (value) => { innerEnv.set(key, value); });
                 });
                 prog(exp.slice(2), innerEnv, k);
-            } else if (car.name === "set") {
+            } else if (car.name === "assign") {
                 if (env.root) {
-                    throw new Error("Cannot set globals.");
+                    throw new Error("Cannot assign globals.");
                 }
                 if (exp.length !== 3 || !symbol(exp[1])) {
-                    throw new Error("Malformed set.");
+                    throw new Error("Malformed assign.");
                 }
                 if (!env.has(exp[1])) {
                     throw new Error(`Unbound variable ${exp[1].name}.`);
@@ -110,6 +110,14 @@ export function evaluate_k(exp: Expression, env: Environment, k: Continuation): 
                     });
                 }
                 k(dict);
+            } else if (car.name === "set") {
+                const set = new HashSet();
+                for (let i = 1; i < exp.length; ++i) {
+                    evaluate_k(exp[i], env, (key) => {
+                        set.add(key);
+                    });
+                }
+                k(set);
             } else {
                 apply(exp[0], exp.slice(1), env, k);
             }            
@@ -123,7 +131,7 @@ export function evaluate_k(exp: Expression, env: Environment, k: Continuation): 
 
 export class Environment {
     private readonly data: Map<string, Expression>;
-    private readonly parent?: Environment;
+    private parent?: Environment;
 
     constructor(parent?: Environment) {
         this.data = new Map();
@@ -147,8 +155,12 @@ export class Environment {
         return this.parent === undefined;
     }
 
-    public extend(keys: Identifier[], values: List) {
-        keys.forEach((k, i) => this.set(k, values[i]));
+    public extend(parent: Environment) {
+        let child: Environment = this;
+        while (child.parent !== undefined) {
+            child = child.parent;
+        }
+        child.parent = parent;
     }
 
     public delete(key: Identifier): boolean {
@@ -250,7 +262,12 @@ export class List extends Array<Expression> {
 
 }
 
-export class Dictionary extends Map<Exclude<Expression, null>, Expression> {
+export class HashSet extends Set<Expression> {
+
+}
+
+export type Key = Exclude<Expression, null>;
+export class Dictionary extends Map<Key, Expression> {
 
 }
 

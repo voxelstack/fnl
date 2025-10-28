@@ -44,6 +44,11 @@ describe("parser macros", () => {
     test(`#("a" 0 "b" #("c" 1))`, () => {
         const object = p(`#("a" 0 "b" #("c" 1))`);
         expect(object).toMatchList([Identifier.empty("dict"), "a", 0, "b", [Identifier.empty("dict"), "c", 1]]);
-        expect(evaluate(object)).toMatchDictionary({ a: 0, b: { c: 1 }})
+        expect(evaluate(object)).toMatchDictionary({ a: 0, b: { c: 1 }});
+    });
+    test(`%(0 1 2 3)`, () => {
+        const object = p(`%(0 1 2 3)`);
+        expect(object).toMatchList([Identifier.empty("set"), 0, 1, 2, 3]);
+        expect(evaluate(object)).toMatchSet([0, 1, 2, 3]);
     });
 });

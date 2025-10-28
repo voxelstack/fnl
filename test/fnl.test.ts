@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { Environment, NativeFunction, Identifier } from "../src/lib/interpreter";
+import { Environment, Identifier } from "../src/lib/interpreter";
 import { evaluate } from "../src/main";
 import { read } from "../src/lib/fnl";
 
@@ -29,11 +29,10 @@ describe("evaluate", () => {
     test.each([
         { expr: `(if true 1 2)`, obj: 1 },
         { expr: `(if false 1 2)`, obj: 2 },
-        // TODO Update with more readable expressions once I have other functions.
-        { expr: `(if (if true true false) 1 2)`, obj: 1 },
-        { expr: `(if (if true false true) 1 2)`, obj: 2 },
-        { expr: `(if true (if true 1 2) 2)`, obj: 1 },
-        { expr: `(if false 1 (if false 1 2))`, obj: 2 },
+        { expr: `(if (|| false true) 1 2)`, obj: 1 },
+        { expr: `(if (&& true false) 1 2)`, obj: 2 },
+        { expr: `(if true (+ 1 2) 2)`, obj: 3 },
+        { expr: `(if false 1 (+ 1 2))`, obj: 3 },
     ])("$expr", ({ expr, obj }) => {
         expect(evaluate(read(expr))).toStrictEqual(obj);
     });
@@ -41,26 +40,17 @@ describe("evaluate", () => {
         { expr: `(do)`, obj: null },
         { expr: `(do nil)`, obj: null },
         { expr: `(do 1 2 3)`, obj: 3 },
-        // TODO Update with more readable expressions once I have other functions.
-        { expr: `(do 1 2 3 (if false 4 5))`, obj: 5 },
+        { expr: `(do 1 2 3 (+ 4 5))`, obj: 9 },
         { expr: `(do 1 2 (do 3 4))`, obj: 4 },
     ])("$expr", ({ expr, obj }) => {
         expect(evaluate(read(expr))).toStrictEqual(obj);
     });
 
     test.each([
-        {
-            expr: `((lambda (a) (+ a 1)) 1)`,
-            env: Environment.from({ "+": new NativeFunction((a, b) => a + b)}),
-            obj: 2
-        },
-        {
-            expr: `(((lambda (a) (lambda (b) (+ a b))) 1) 2)`,
-            env: Environment.from({ "+": new NativeFunction((a, b) => a + b)}),
-            obj: 3
-        },
-    ])("$expr", ({ expr, env, obj }) => {
-        expect(evaluate(read(expr), env)).toStrictEqual(obj);
+        { expr: `((lambda (a) (+ a 1)) 1)`, obj: 2 },
+        { expr: `(((lambda (a) (lambda (b) (+ a b))) 1) 2)`, obj: 3 },
+    ])("$expr", ({ expr, obj }) => {
+        expect(evaluate(read(expr))).toStrictEqual(obj);
     });
 
     test.each([
@@ -69,10 +59,7 @@ describe("evaluate", () => {
         { expr: `(let ((a 17)) (let ((a 13)) a))`, obj: 13 },
         { expr: `(let ((a 17) (b 13)) (let ((b 11)) (+ a b)))`, obj: 28 },
     ])("$expr", ({ expr, obj }) => {
-        const env =  Environment.from({
-            "+": new NativeFunction((a, b) => a + b),
-        });
-        expect(evaluate(read(expr), env)).toStrictEqual(obj);
+        expect(evaluate(read(expr))).toStrictEqual(obj);
     });
 
     test.each([
@@ -82,15 +69,15 @@ describe("evaluate", () => {
     });
 
     test.each([
-        { expr: `(set i 0)` },
+        { expr: `(assign i 0)` },
     ])('$expr', ({ expr }) => {
         expect(() => evaluate(read(expr))).toThrowError();
     });
 
     test.each([
-        { expr: `(let ((a 0)) (set a 1) a)`, obj: 1 },
-        { expr: `(let ((a 0)) (let ((b 0)) (set a 1) a))`, obj: 1 },
-        { expr: `(let ((a 0)) (let ((b 0)) (set a 1)) a)`, obj: 0 },
+        { expr: `(let ((a 0)) (assign a 1) a)`, obj: 1 },
+        { expr: `(let ((a 0)) (let ((b 0)) (assign a 1) a))`, obj: 1 },
+        { expr: `(let ((a 0)) (let ((b 0)) (assign a 1)) a)`, obj: 0 },
     ])('$expr', ({ expr, obj }) => {
         expect(evaluate(read(expr))).toStrictEqual(obj);
     });
@@ -106,12 +93,7 @@ describe("evaluate", () => {
         { expr: `(do (def a 17) (def b 13) (+ a b))`, obj: 30 },
         { expr: `(do (def fib (lambda (n) (if (<= n 1) 1 (+ (fib (- n 2)) (fib (- n 1)))))) (fib 5))`, obj: 8 }
     ])("$expr", ({ expr, obj }) => {
-        const env = Environment.from({
-            "+": new NativeFunction((a, b) => a + b),
-            "-": new NativeFunction((a, b) => a - b),
-            "<=": new NativeFunction((a, b) => a <= b),
-        });
-        expect(evaluate(read(expr), env)).toStrictEqual(obj);
+        expect(evaluate(read(expr))).toStrictEqual(obj);
     });
 
     test.each([
@@ -121,11 +103,6 @@ describe("evaluate", () => {
     });
 
     test("fact", () => {
-        const env =  Environment.from({
-            "=": new NativeFunction((a, b) => a === b),
-            "-": new NativeFunction((a, b) => a - b),
-            "*": new NativeFunction((a, b) => a * b),
-        });
         const expr = `
             (letrec ((fact (lambda (n)
               (if (= n 0)
@@ -133,20 +110,17 @@ describe("evaluate", () => {
                 (* n (fact (- n 1)))))))
               (fact 10))
         `;
-        expect(evaluate(read(expr), env)).toStrictEqual(3628800);
+        expect(evaluate(read(expr))).toStrictEqual(3628800);
     });
 
     test.each([
         { expr: `(callcc (lambda (k) (k 22)))`, obj: 22 },
         { expr: `(callcc (lambda (k) (+ 1 (k 22))))`, obj: 22 },
         { expr: `(callcc (lambda (k) (+ (k 13) (k 17))))`, obj: 13 },
-        { expr: `(callcc (lambda (k) (let ((a 0)) (set a 1) (k 0) a)))`, obj: 0 },
+        { expr: `(callcc (lambda (k) (let ((a 0)) (assign a 1) (k 0) a)))`, obj: 0 },
         { expr: `(let ((a 0)) (callcc (lambda (k) (let ((a 1)) (k 2)))) a)`, obj: 0 },
     ])("$expr", ({ expr, obj }) => {
-        const env =  Environment.from({
-            "+": new NativeFunction((a, b) => a + b),
-        });
-        expect(evaluate(read(expr), env)).toStrictEqual(obj);
+        expect(evaluate(read(expr))).toStrictEqual(obj);
     });
     
     test.each([
@@ -164,6 +138,12 @@ describe("evaluate", () => {
         { expr: `(dict "a" (dict "b" 1) "c" 2 "d" (dict "e" 3 "f" 4))`, obj: { a: { b: 1 }, c: 2, d: { e: 3, f: 4 } } },
     ])("$expr", ({ expr, obj }) => {
         expect(evaluate(read(expr))).toMatchDictionary(obj);
+    });
+
+    test.each([
+        { expr: `(set 0 1 2)`, obj: [0, 1, 2] },
+    ])("$expr", ({ expr, obj }) => {
+        expect(evaluate(read(expr))).toMatchSet(obj);
     });
 });
 

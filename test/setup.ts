@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { Dictionary, List, Identifier } from "../src/lib/interpreter";
+import { Dictionary, List, Identifier, HashSet } from "../src/lib/interpreter";
 import type { Expression } from "../src/lib/types";
 
 expect.extend({
@@ -26,6 +26,23 @@ expect.extend({
         actual: received.name,
         expected: expected
     }),
+    toMatchSet: (received: any, expected: any[]) => {
+        const pass = setMatches(received, expected);
+
+        let formattedActual: string | undefined;
+        let formattedExpected: string | undefined;
+        if (!pass) {
+            formattedActual = formatAsSet(received);
+            formattedExpected = formatAsSet(expected);
+        }
+
+        return {
+            pass,
+            message: () => `expected ${formattedActual} to match ${formattedExpected}`,
+            actual: formattedActual,
+            expected: formattedExpected
+        };
+    },
     toMatchDictionary: (received, expected) => {
         const pass = dictionaryMatches(received, expected);
         
@@ -73,23 +90,46 @@ function listMatches(received: any, expected: ListLike): boolean {
     }, true);
 }
 
-function formatAsList(arr: any[]) {
-    return `(${arr.map((o): string => {
-        if (o === null) {
-            return 'nil';
-        } else if (o instanceof Identifier) {
-            return o.name;
-        } else if (listLike(o)) {
-            return formatAsList(o);
-        } else if (dictionaryLike(o)) {
-            return formatAsDictionary(o);
-        }
-        return o.toString();
-    }).join(" ")})`
+function formatAsList(o: any) {
+    if (listLike(o)) {
+        return `(${o.map((el): string => {
+            if (el === null) {
+                return 'nil';
+            } else if (el instanceof Identifier) {
+                return el.name;
+            } else if (listLike(el)) {
+                return formatAsList(el);
+            } else if (dictionaryLike(el)) {
+                return formatAsDictionary(el);
+            }
+            return el.toString();
+        }).join(" ")})`
+    }
+    return o.toString();
 }
 
 function listLike(o: any) {
-    return o instanceof List || Array.isArray(o);
+    return o !== null && Array.isArray(o);
+}
+
+// Only works for atoms, but I'm fine with that.
+function setMatches(received: any, expected: any[]): boolean {
+    if (!(received instanceof HashSet)) {
+        return false;
+    }
+
+    return expected.reduce((pass, value) => {
+        return pass && received.has(value);
+    }, true);
+}
+
+function formatAsSet(o: any) {
+    if (listLike(o)) {
+        return `%${formatAsList(o)}`;
+    } else if (o instanceof Set) {
+        return `%${formatAsList([...o.values()])}`;
+    }
+    return o.toString();
 }
 
 type DictionaryLike = Record<string | number, any> | Map<any, any>
@@ -112,9 +152,12 @@ function dictionaryMatches(received: any, expected: DictionaryLike): boolean {
     }, true);
 }
 
-function formatAsDictionary(dict: DictionaryLike) {
-    const entries = dict instanceof Map ? [...dict.entries()] : Object.entries(dict);
-    return `#${formatAsList(entries.flat())}`;
+function formatAsDictionary(o: any) {
+    if (dictionaryLike(o)) {
+        const entries = o instanceof Map ? [...o.entries()] : Object.entries(o);
+        return `#${formatAsList(entries.flat())}`;
+    }
+    return o.toString();
 }
 
 function dictionaryLike(o: any): o is DictionaryLike {
