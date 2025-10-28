@@ -1,1 +1,1 @@
-export { evaluate } from "./lib/fnl";
+export { evaluate,  read } from "./lib/fnl";

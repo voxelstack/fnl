@@ -4,17 +4,11 @@ import { Reader } from "./reader";
 import { stdEnvironment, stdParserMacros, stdReaderMacros } from "./std";
 import type { Expression, ParserMacros, ReaderMacros } from "./types";
 
-export function evaluate(exp: Expression, env = Environment.empty()): Expression {
+export async function evaluate(exp: Expression, env = Environment.empty()) {
     env.extend(stdEnvironment);
-
-    let res: Expression | undefined;
-    evaluate_k(exp, env, (obj) => res = obj);
-
-    if (res === undefined) {
-        throw new Error("Evaluate did not return.");
-    }
-
-    return res;
+    return new Promise((resolve) => {
+        evaluate_k(exp, env, resolve);
+    });
 }
 
 export function read(input: string, readerMacros?: ReaderMacros, parserMacros?: ParserMacros): Expression {

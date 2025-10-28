@@ -1,6 +1,6 @@
-import type { Atom, Continuation, Expression } from "./types";
+import type { Continuation, Expression } from "./types";
 
-export function evaluate_k(exp: Expression, env: Environment, k: Continuation): void {
+export function evaluate_k(exp: Expression, env: Environment, k: Continuation) {
     if (symbol(exp)) {
         const value = env.get(exp);
         if (value === undefined) {
@@ -118,6 +118,21 @@ export function evaluate_k(exp: Expression, env: Environment, k: Continuation): 
                     });
                 }
                 k(set);
+            } else if (car.name === "async") {
+                k(new Async((resolve) => {
+                    prog(exp.slice(1), env, resolve);
+                }));
+            } else if (car.name === "await") {
+                if (exp.length !== 2) {
+                    throw new Error("Malformed await.");
+                }
+                // TODO Not 100% sure about this, but it's good enough for now.
+                evaluate_k(exp[1], env, (a) => {
+                    if (!promise(a)) {
+                        throw new Error("Only async blocks can be awaited.");
+                    }
+                    a.then(k);
+                });
             } else {
                 apply(exp[0], exp.slice(1), env, k);
             }            
@@ -270,36 +285,38 @@ export class Dictionary extends Map<Key, Expression> {
 
 }
 
-export function prog(exps: List, env: Environment, k: Continuation): void {
-    for (let i = 0; i < exps.length - 1; ++i) {
-        let curr: Expression | undefined;
-        evaluate_k(exps[i], env, (val) => curr = val);
+export class Async extends Promise<Expression> {
 
-        if (curr === undefined) {
-            // If a continuation was not called, we must have jumped.
-            return;
-        }
+}
+
+export function prog(exps: List, env: Environment, k: Continuation): void {
+    if (exps.length === 0) {
+        k(null);
+    } else if (exps.length === 1) {
+        evaluate_k(exps[0], env, k);
+    } else {
+        evaluate_k(exps[0], env, () => {
+            prog(exps.slice(1), env, k);
+        });
     }
-    evaluate_k(exps[exps.length - 1] ?? null, env, k);
+}
+
+function evlis(exps: List, env: Environment, k: (vals: List) => void) {
+    if (exps.length === 0) {
+        k([]);
+    } else {
+        evaluate_k(exps[0], env, (val) => {
+            evlis(exps.slice(1), env, (vals) => k([val, ...vals]));
+        });
+    }
 }
 
 function apply(fn: Expression, args: List, env: Environment, k: Continuation) {
     evaluate_k(fn, env, (fn) => {
         if (func(fn)) {
-            const vals: Expression[] = [];
-
-            for (const exp of args) {
-                let curr: Expression | undefined;
-                evaluate_k(exp, env, (val) => curr = val);
-
-                if (curr === undefined) {
-                    // If a continuation was not called, we must have jumped.
-                    return;
-                }
-                vals.push(curr);
-            }
-
-            fn.apply(vals, k);
+            evlis(args, env, (vals) => {
+                fn.apply(vals, k);
+            });
         } else if (continuation(fn)) {
             if (args.length !== 1) {
                 throw new Error("Can only apply continuation to Object.");
@@ -312,13 +329,8 @@ function apply(fn: Expression, args: List, env: Environment, k: Continuation) {
 }
 
 function list(o: Expression): o is List { return o instanceof List; }
-function dictionary(o: Expression): o is Dictionary { return o instanceof Dictionary; }
-function atom(o: Expression): o is Atom { return !list(o); }
 function symbol(o: Expression): o is Identifier { return o instanceof Identifier; }
-function number(o: Expression): o is number { return typeof o === "number"; }
-function string(o: Expression): o is string { return typeof o === "string"; }
 function boolean(o: Expression): o is boolean { return typeof o === "boolean"; }
-function nil(o: Expression): o is null { return o === null };
 function func(o: Expression): o is Procedure { return o instanceof Procedure; }
-function primitive(o: Expression): o is NativeFunction { return o instanceof NativeFunction; }
 function continuation(o: Expression): o is Continuation { return typeof o === "function" };
+function promise(o: Expression): o is Async { return o instanceof Async; }

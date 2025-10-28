@@ -1,10 +1,10 @@
-import type { Dictionary, Procedure, List, Identifier, HashSet } from "./interpreter";
+import type { Dictionary, Procedure, List, Identifier, HashSet, Async } from "./interpreter";
 import type { Token } from "./parser";
 import type { Reader } from "./reader";
 
 export type Continuation = (obj: Expression) => void;
 
-export type Atom = Procedure | Continuation | Identifier | number | string | boolean | null;
+export type Atom = Procedure | Async | Continuation | Identifier | number | string | boolean | null;
 export type Expression = Atom | List | HashSet | Dictionary;
 
 export type ReaderMacro = (input: Reader<string>) => Token[];
