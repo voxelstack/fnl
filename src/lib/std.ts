@@ -70,10 +70,10 @@ export const stdEnvironment = Environment.from({
     "dissoc": new NativeFunction((dict: Dictionary, key: Key) => dict.delete(key)),
     "get": new NativeFunction((dict: Dictionary, key: Key) => dict.get(key) ?? null),
     "keys": new NativeFunction((dict: Dictionary) => new List(...dict.keys())),
-    "vals": new NativeFunction((dict: Dictionary) => new List(...dict.values())),
 
     "conj": new NativeFunction((set: HashSet, value: Expression) => set.add(value)),
     "disj": new NativeFunction((set: HashSet, value: Expression) => set.delete(value)),
 
     "has": new NativeFunction((collection: Dictionary | HashSet, key: Key) => collection.has(key)),
+    "vals": new NativeFunction((collection: Dictionary | HashSet) => new List(...collection.values())),
 });

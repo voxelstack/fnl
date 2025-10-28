@@ -144,7 +144,6 @@ export class Environment {
 
     static from(vars: Record<string, Expression>, parent?: Environment) {
         const env = Environment.empty(parent);
-        // TODO I really shouldn't have a type called Object.
         for (const [key, value] of Object.entries(vars)) {
             env.set(Identifier.empty(key), value);
         }
