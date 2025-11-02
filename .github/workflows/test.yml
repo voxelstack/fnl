@@ -1,0 +1,12 @@
+name: Test
+on: push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - run: cargo test
+      - run: wasm-pack test --headless --chrome
+      - run: wasm-pack test --headless --firefox
