@@ -4,9 +4,11 @@ use futures::{stream::Peekable, Stream, StreamExt};
 use std::{fmt, pin::Pin};
 use utils::set_panic_hook;
 use wasm_bindgen::JsValue;
+use web_sys::js_sys::Array;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Object {
+    List(Vec<Object>),
     String(String),
     Number(f64),
     Nil(()),
@@ -15,6 +17,11 @@ pub enum Object {
 impl Into<JsValue> for Object {
     fn into(self) -> JsValue {
         match self {
+            Object::List(list) => JsValue::from(
+                list.into_iter()
+                    .map(Into::<JsValue>::into)
+                    .collect::<Array>(),
+            ),
             Object::String(string) => JsValue::from_str(&string),
             Object::Number(number) => JsValue::from_f64(number),
             Object::Nil(()) => JsValue::null(),
@@ -23,7 +30,7 @@ impl Into<JsValue> for Object {
 }
 
 #[derive(Debug)]
-pub struct ParseError(String);
+pub struct ParseError(pub String);
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -37,12 +44,13 @@ where
 {
     set_panic_hook();
 
-    let object: Result<Object, ParseError> = loop {
+    loop {
         // We can only peek once, so call next here and pass ch to the reader if needed.
         match input.as_mut().next().await {
             Some(ch) if ch.is_whitespace() => continue,
             Some(ch) => {
                 break match ch {
+                    '(' => Box::pin(read_list(input)).await,
                     '"' => read_string(input).await,
                     '-' if input.as_mut().peek().await.is_some_and(|x| x.is_numeric()) => {
                         read_number(input, '-').await
@@ -53,12 +61,28 @@ where
             }
             None => break Ok(Object::Nil(())),
         };
-    };
-
-    match input.as_mut().next().await {
-        Some(_) => Err(ParseError(String::from("Expected EOF"))),
-        None => object,
     }
+}
+
+async fn read_list<I>(input: &mut Pin<&mut Peekable<I>>) -> Result<Object, ParseError>
+where
+    I: Stream<Item = char>,
+{
+    let mut list = Vec::new();
+    while let Some(ch) = input.as_mut().peek().await {
+        match ch {
+            ')' => {
+                input.as_mut().next().await;
+                return Ok(Object::List(list));
+            }
+            _ if ch.is_whitespace() => {
+                input.as_mut().next().await;
+                continue;
+            }
+            _ => list.push(read(input).await?),
+        }
+    }
+    Err(ParseError(String::from("Unterminated list")))
 }
 
 async fn read_string<I>(input: &mut Pin<&mut Peekable<I>>) -> Result<Object, ParseError>
