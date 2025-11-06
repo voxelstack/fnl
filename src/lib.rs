@@ -11,6 +11,8 @@ pub enum Object {
     List(Vec<Object>),
     String(String),
     Number(f64),
+    Symbol(String), // TODO Actual symbols
+    Boolean(bool),
     Nil(()),
 }
 
@@ -24,6 +26,8 @@ impl Into<JsValue> for Object {
             ),
             Object::String(string) => JsValue::from_str(&string),
             Object::Number(number) => JsValue::from_f64(number),
+            Object::Symbol(symbol) => JsValue::from_str(&symbol),
+            Object::Boolean(boolean) => JsValue::from_bool(boolean),
             Object::Nil(()) => JsValue::null(),
         }
     }
@@ -55,8 +59,8 @@ where
                     '-' if input.as_mut().peek().await.is_some_and(|x| x.is_numeric()) => {
                         read_number(input, '-').await
                     }
-                    _ if ch.is_numeric() => read_number(input, ch).await,
-                    _ => todo!(),
+                    ch if ch.is_numeric() => read_number(input, ch).await,
+                    _ => read_token(input, ch).await,
                 }
             }
             None => break Ok(Object::Nil(())),
@@ -75,7 +79,7 @@ where
                 input.as_mut().next().await;
                 return Ok(Object::List(list));
             }
-            _ if ch.is_whitespace() => {
+            ch if ch.is_whitespace() => {
                 input.as_mut().next().await;
                 continue;
             }
@@ -136,4 +140,31 @@ where
     Ok(Object::Number(number.parse::<f64>().map_err(|_| {
         ParseError(String::from("Could not parse number"))
     })?))
+}
+
+async fn read_token<I>(input: &mut Pin<&mut Peekable<I>>, curr: char) -> Result<Object, ParseError>
+where
+    I: Stream<Item = char>,
+{
+    let mut token = String::from(curr);
+    while let Some(ch) = input.as_mut().peek().await {
+        match ch {
+            '"' | '(' | ')' => break,
+            ch if ch.is_whitespace() => break,
+            _ => {
+                token.push(*ch);
+                input.as_mut().next().await;
+            }
+        }
+    }
+    Ok(interpret_token(token))
+}
+
+fn interpret_token(token: String) -> Object {
+    match token.as_str() {
+        "true" => Object::Boolean(true),
+        "false" => Object::Boolean(false),
+        "nil" => Object::Nil(()),
+        _ => Object::Symbol(token),
+    }
 }

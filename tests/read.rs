@@ -110,3 +110,36 @@ test_fail!(List, [
     fail_on_list_element:
     r#"(0 (3. 1 4 1 5))"# => "Missing decimal part",
 ]);
+
+test_read!(Boolean, bool, [
+    read_true:
+    r#"true"# => true,
+
+    read_false:
+    r#"false"# => false,
+]);
+
+test_read!(Nil, (), [
+    read_nil:
+    r#"nil"# => (),
+]);
+
+test_read!(Symbol, String, [
+    read_alpha:
+    r#"ident"# => "ident",
+
+    read_alphanumeric:
+    r#"ident001"# => "ident001",
+
+    read_earmuffs:
+    r#"*uwu*"# => "*uwu*",
+
+    stop_at_quote:
+    r#"ident""# => "ident",
+
+    stop_at_list_open:
+    r#"ident(""# => "ident",
+
+    stop_at_list_close:
+    r#"ident)""# => "ident",
+]);
