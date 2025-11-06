@@ -42,6 +42,17 @@ impl fmt::Display for ParseError {
     }
 }
 
+// TODO Parse error doesn't make sense here.
+pub async fn eval(input: Object) -> Result<Object, ParseError> {
+    match input {
+        atom @ Object::String(_)
+        | atom @ Object::Number(_)
+        | atom @ Object::Boolean(_)
+        | atom @ Object::Nil(_) => Ok(atom),
+        _ => todo!(),
+    }
+}
+
 pub async fn read<I>(input: &mut Pin<&mut Peekable<I>>) -> Result<Object, ParseError>
 where
     I: Stream<Item = char>,
