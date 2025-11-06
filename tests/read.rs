@@ -141,3 +141,21 @@ test_read!(Symbol, String, [
     stop_at_list_close:
     r#"ident)""# => "ident",
 ]);
+
+test_read!(Nil, (), [
+    ignore_comment:
+    r#"; comment 01 (1 2 3) """# => (),
+]);
+
+test_read!(Number, f64, [
+    end_comment_on_lf:
+    "; Pie\n3.14" => 3.14,
+
+    end_comment_on_cr:
+    "; Pie\r3.14" => 3.14,
+]);
+
+test_fail!(Nil, [
+    stop_at_comment:
+    r#"(+ 1 1 ; my list"# => "Unterminated list",
+]);

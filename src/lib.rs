@@ -51,6 +51,7 @@ where
     loop {
         // We can only peek once, so call next here and pass ch to the reader if needed.
         match input.as_mut().next().await {
+            Some(';') => read_comment(input).await,
             Some(ch) if ch.is_whitespace() => continue,
             Some(ch) => {
                 break match ch {
@@ -65,6 +66,19 @@ where
             }
             None => break Ok(Object::Nil(())),
         };
+    }
+}
+
+async fn read_comment<I>(input: &mut Pin<&mut Peekable<I>>)
+where
+    I: Stream<Item = char>,
+{
+    while let Some(ch) = input.as_mut().next().await {
+        match ch {
+            // \n is whitespace, we can ignore it on \r\n.
+            '\n' | '\r' => return,
+            _ => continue,
+        }
     }
 }
 
