@@ -78,11 +78,12 @@ test_read!(Number, f64, [
 
     read_negative_float:
     r#"-3.14"# => -3.14,
-]);
 
-test_fail!(Number, [
-    fail_on_missing_decimal:
-    r#"3."# => "Missing decimal part",
+    read_missing_decimal:
+    r#"3."# => 3.0,
+
+    stop_on_second_dot:
+    r#"3.14.15"# => 3.14,
 ]);
 
 test_read!(List, Vec<Object>, [
@@ -106,9 +107,6 @@ test_read!(List, Vec<Object>, [
 test_fail!(List, [
     fail_on_unterminated_list:
     r#"(0 (1 1)"# => "Unterminated list",
-
-    fail_on_list_element:
-    r#"(0 (3. 1 4 1 5))"# => "Missing decimal part",
 ]);
 
 test_read!(Boolean, bool, [

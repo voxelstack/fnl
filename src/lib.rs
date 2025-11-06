@@ -128,11 +128,10 @@ where
                 number.push(*ch);
                 input.as_mut().next().await;
 
-                if let Some(ch) = input.as_mut().next_if(|x| x.is_numeric()).await {
+                while let Some(ch) = input.as_mut().next_if(|x| x.is_numeric()).await {
                     number.push(ch);
-                    continue;
                 }
-                return Err(ParseError(String::from("Missing decimal part")));
+                break;
             }
             _ => break,
         }
